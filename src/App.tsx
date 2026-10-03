@@ -8,9 +8,14 @@ import { Learn } from './screens/Learn'
 import { LevelPicker } from './screens/LevelPicker'
 import { Review } from './screens/Review'
 import { SettingsScreen } from './screens/Settings'
-import type { Theme } from './db/db'
+import { Mistakes } from './screens/Mistakes'
+import { Progress } from './screens/Progress'
+import { Quiz } from './screens/Quiz'
+import type { QuizKind, Theme } from './db/db'
+import type { Level } from './lib/types'
 
-type Route = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily'
+type Page = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily' | 'progress' | 'mistakes'
+type Route = { page: Page } | { page: 'quiz'; kind: QuizKind; level?: Level; back: Page }
 
 function useTheme(theme: Theme | undefined) {
   useEffect(() => {
@@ -29,7 +34,7 @@ export default function App() {
   const settings = useSettings()
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [route, setRoute] = useState<Route>('home')
+  const [route, setRoute] = useState<Route>({ page: 'home' })
   useTheme(settings?.theme)
 
   useEffect(() => {
@@ -54,22 +59,31 @@ export default function App() {
   }
 
   // الإعداد الأولي: المستوى ثم عدد الكلمات اليومي.
-  if (!settings.startLevel) return <LevelPicker onDone={() => setRoute('home')} />
-  if (!settings.onboarded) return <DailyCount onDone={() => setRoute('home')} />
+  const go = (page: Page) => setRoute({ page })
+  const home = () => go('home')
+  const quiz = (back: Page) => (kind: QuizKind, level?: Level) => setRoute({ page: 'quiz', kind, level, back })
 
-  const home = () => setRoute('home')
-  switch (route) {
+  if (!settings.startLevel) return <LevelPicker onDone={home} />
+  if (!settings.onboarded) return <DailyCount onDone={home} />
+
+  switch (route.page) {
     case 'learn':
       return <Learn onExit={home} />
     case 'review':
       return <Review onExit={home} />
+    case 'quiz':
+      return <Quiz key={`${route.kind}-${route.level}`} kind={route.kind} level={route.level} onExit={() => go(route.back)} />
+    case 'progress':
+      return <Progress onBack={home} startQuiz={quiz('progress')} openMistakes={() => go('mistakes')} />
+    case 'mistakes':
+      return <Mistakes onBack={home} onPractice={() => quiz('mistakes')('mistakes')} />
     case 'settings':
-      return <SettingsScreen go={setRoute} onBack={home} />
+      return <SettingsScreen go={go} onBack={home} />
     case 'levels':
-      return <LevelPicker onDone={() => setRoute('settings')} onBack={() => setRoute('settings')} />
+      return <LevelPicker onDone={() => go('settings')} onBack={() => go('settings')} />
     case 'daily':
-      return <DailyCount onDone={() => setRoute('settings')} onBack={() => setRoute('settings')} />
+      return <DailyCount onDone={() => go('settings')} onBack={() => go('settings')} />
     default:
-      return <Home go={setRoute} />
+      return <Home go={go} startQuiz={quiz('home')} />
   }
 }

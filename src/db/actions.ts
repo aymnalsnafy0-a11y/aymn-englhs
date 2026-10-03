@@ -1,8 +1,9 @@
-import { toDayKey } from '../lib/dates'
+import { diffDays, toDayKey, type DayKey } from '../lib/dates'
 import { reconcilePlan, type ProgressStatus } from '../lib/plan'
-import { review, startLearning, type Rating } from '../lib/srs'
+import type { QuizScore } from '../lib/quiz'
+import { relapse, review, startLearning, type Rating } from '../lib/srs'
 import type { Level } from '../lib/types'
-import { db, DEFAULT_SETTINGS, type Settings } from './db'
+import { db, DEFAULT_SETTINGS, type ActivityRow, type MistakeRow, type QuizKind, type Settings } from './db'
 
 export async function getSettings(): Promise<Settings> {
   return (await db.settings.get('main')) ?? DEFAULT_SETTINGS
@@ -38,10 +39,39 @@ export async function syncTodayPlan(targetCount?: number) {
   })
 }
 
+async function bumpActivity(field: keyof Omit<ActivityRow, 'date'>): Promise<void> {
+  const date = toDayKey()
+  const row = (await db.activity.get(date)) ?? { date, cards: 0, reviews: 0, quizzes: 0 }
+  await db.activity.put({ ...row, [field]: row[field] + 1 })
+}
+
+async function addMistake(wordId: string, source: MistakeRow['source'], today: DayKey): Promise<void> {
+  const row = await db.mistakes.get(wordId)
+  const active = row && !row.resolvedAt
+  await db.mistakes.put({
+    wordId,
+    count: (active ? row.count : 0) + 1,
+    firstAt: active ? row.firstAt : today,
+    lastAt: today,
+    source,
+  })
+}
+
+/**
+ * تصحيح كلمة من الدفتر. لا تخرج في نفس يوم الخطأ (حتى تظهر أولًا في اليوم التالي)،
+ * إلا عند التدرّب على الدفتر نفسه.
+ */
+async function resolveMistake(wordId: string, today: DayKey, force = false): Promise<void> {
+  const row = await db.mistakes.get(wordId)
+  if (!row || row.resolvedAt) return
+  if (force || diffDays(row.lastAt, today) >= 1) await db.mistakes.put({ ...row, resolvedAt: today })
+}
+
 /** أنهى المتعلم بطاقة الكلمة: تدخل جدول المراجعة. */
 export async function completeWord(wordId: string): Promise<void> {
   const today = toDayKey()
-  await db.transaction('rw', db.progress, db.plans, async () => {
+  await db.transaction('rw', [db.progress, db.plans, db.activity], async () => {
+    await bumpActivity('cards')
     const existing = await db.progress.get(wordId)
     if (!existing) {
       await db.progress.put({
@@ -67,16 +97,50 @@ export async function markKnown(wordId: string): Promise<void> {
 
 /** يسجّل نتيجة مراجعة ويعيد true إذا يجب إعادتها في نفس الجلسة. */
 export async function recordReview(wordId: string, rating: Rating): Promise<boolean> {
-  const row = await db.progress.get(wordId)
-  if (!row?.srs) return false
-  const { state, repeatInSession } = review(row.srs, rating, toDayKey())
-  await db.progress.put({
-    ...row,
-    srs: state,
-    status: state.mastered ? 'mastered' : 'learning',
-    updatedAt: Date.now(),
+  const today = toDayKey()
+  return db.transaction('rw', [db.progress, db.mistakes, db.activity], async () => {
+    const row = await db.progress.get(wordId)
+    if (!row?.srs) return false
+    const { state, repeatInSession } = review(row.srs, rating, today)
+    await db.progress.put({
+      ...row,
+      srs: state,
+      status: state.mastered ? 'mastered' : 'learning',
+      updatedAt: Date.now(),
+    })
+    if (rating === 'forgot') await addMistake(wordId, 'review', today)
+    else await resolveMistake(wordId, today)
+    await bumpActivity('reviews')
+    return repeatInSession
   })
-  return repeatInSession
+}
+
+/**
+ * يحفظ نتيجة اختبار. الكلمات الخاطئة تدخل دفتر الأخطاء وتعود لبداية المراجعة
+ * (مستحقة غدًا، فتظهر أولًا في اليوم التالي). الصحيحة تُصحَّح في الدفتر.
+ */
+export async function saveQuizResult(kind: QuizKind, result: QuizScore, correctIds: string[], level?: Level) {
+  const today = toDayKey()
+  await db.transaction('rw', [db.quizzes, db.mistakes, db.progress, db.plans, db.activity], async () => {
+    await db.quizzes.add({ kind, date: today, total: result.total, correct: result.correct, wrongIds: result.wrongIds, level })
+    for (const wordId of result.wrongIds) {
+      await addMistake(wordId, kind, today)
+      const row = await db.progress.get(wordId)
+      await db.progress.put({
+        wordId,
+        status: 'learning',
+        srs: relapse(row?.srs, today),
+        learnedAt: row?.learnedAt ?? today,
+        updatedAt: Date.now(),
+      })
+    }
+    for (const wordId of correctIds) await resolveMistake(wordId, today, kind === 'mistakes')
+    if (kind === 'daily') {
+      const plan = await db.plans.get(today)
+      if (plan) await db.plans.put({ ...plan, quiz: { total: result.total, correct: result.correct } })
+    }
+    await bumpActivity('quizzes')
+  })
 }
 
 export async function chooseStartLevel(level: Level): Promise<void> {

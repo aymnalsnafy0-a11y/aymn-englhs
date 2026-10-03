@@ -81,6 +81,8 @@ export interface DayPlan {
   startLevel: Level
   wordIds: string[]
   doneIds: string[]
+  /** نتيجة آخر محاولة للاختبار الشامل لهذا اليوم. */
+  quiz?: { total: number; correct: number }
 }
 
 /**
@@ -120,5 +122,6 @@ export function reconcilePlan(
     startLevel,
     wordIds: [...doneIds, ...kept, ...extra.map((w) => w.id)],
     doneIds,
+    ...(fresh || !existing.quiz ? {} : { quiz: existing.quiz }),
   }
 }

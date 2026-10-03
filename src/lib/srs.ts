@@ -88,13 +88,22 @@ export function isDue(state: SrsState, today: DayKey): boolean {
   return !state.mastered && state.due !== null && diffDays(state.due, today) >= 0
 }
 
-/** المستحقة اليوم: المُعاد تعلّمها أولًا، ثم الأقدم استحقاقًا، ثم المرحلة الأدنى. */
-export function dueQueue<T extends { srs: SrsState }>(items: T[], today: DayKey): T[] {
+/**
+ * المستحقة اليوم: المُعاد تعلّمها أولًا، ثم كلمات دفتر الأخطاء (priority)،
+ * ثم الأقدم استحقاقًا، ثم المرحلة الأدنى.
+ */
+export function dueQueue<T extends { wordId?: string; srs: SrsState }>(
+  items: T[],
+  today: DayKey,
+  priority: Set<string> = new Set(),
+): T[] {
+  const first = (item: T) => Number(item.wordId !== undefined && priority.has(item.wordId))
   return items
     .filter((item) => isDue(item.srs, today))
     .sort(
       (a, b) =>
         Number(b.srs.relearning) - Number(a.srs.relearning) ||
+        first(b) - first(a) ||
         (a.srs.due ?? '').localeCompare(b.srs.due ?? '') ||
         a.srs.stage - b.srs.stage,
     )
@@ -104,4 +113,20 @@ export function dueQueue<T extends { srs: SrsState }>(items: T[], today: DayKey)
 export function suggestedNewCount(dueCount: number, requested: number): number | null {
   if (dueCount <= REVIEW_OVERLOAD) return null
   return requested > OVERLOAD_SUGGESTED_NEW ? OVERLOAD_SUGGESTED_NEW : null
+}
+
+/**
+ * خطأ في اختبار (يومي/أسبوعي/نهاية مستوى/دفتر الأخطاء): الكلمة تعود لبداية السلّم
+ * وتُستحق غدًا لتظهر أول المراجعات. كلمة بلا حالة (معروفة ضمنيًا) تبدأ التعلّم الآن.
+ */
+export function relapse(state: SrsState | undefined, today: DayKey): SrsState {
+  const base = state ?? startLearning(today)
+  return {
+    ...base,
+    stage: 0,
+    due: addDays(today, INTERVALS[0]),
+    relearning: false,
+    mastered: false,
+    lapses: base.lapses + (state ? 1 : 0),
+  }
 }

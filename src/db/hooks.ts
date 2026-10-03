@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { toDayKey } from '../lib/dates'
 import { summarize, type ProgressStatus } from '../lib/plan'
 import { dueQueue } from '../lib/srs'
+import { bestStreak, currentStreak } from '../lib/streak'
 import type { Word } from '../lib/types'
 import { db, DEFAULT_SETTINGS, type ProgressRow } from './db'
 import type { LoadInfo } from './loader'
@@ -34,18 +35,44 @@ export function useProgressMap(progress: ProgressRow[] | undefined) {
   )
 }
 
+/** كلمات دفتر الأخطاء التي لم تُصحَّح بعد، الأحدث أولًا. */
+export function useActiveMistakes() {
+  return useLiveQuery(async () =>
+    (await db.mistakes.orderBy('lastAt').reverse().toArray()).filter((m) => !m.resolvedAt),
+  )
+}
+
+export function useQuizzes() {
+  return useLiveQuery(() => db.quizzes.orderBy('id').reverse().toArray())
+}
+
+export function useActivity() {
+  return useLiveQuery(() => db.activity.toArray())
+}
+
+export function useStreak() {
+  const activity = useActivity()
+  return useMemo(() => {
+    if (!activity) return undefined
+    const days = activity.map((a) => a.date)
+    return { current: currentStreak(days, toDayKey()), best: bestStreak(days), days: new Set(days) }
+  }, [activity])
+}
+
 export function useStats() {
   const words = useWords()
   const progress = useProgress()
   const settings = useSettings()
+  const mistakes = useActiveMistakes()
   const map = useProgressMap(progress)
   return useMemo(() => {
-    if (!words || !progress || !settings?.startLevel) return undefined
+    if (!words || !progress || !mistakes || !settings?.startLevel) return undefined
     const today = toDayKey()
     const due = dueQueue(
       progress.filter((p): p is ProgressRow & { srs: NonNullable<ProgressRow['srs']> } => !!p.srs),
       today,
+      new Set(mistakes.map((m) => m.wordId)),
     )
-    return { ...summarize(words, map, settings.startLevel), due, words, settings }
-  }, [words, progress, settings, map])
+    return { ...summarize(words, map, settings.startLevel), due, words, settings, progress, progressMap: map, mistakes }
+  }, [words, progress, settings, mistakes, map])
 }

@@ -121,3 +121,25 @@ describe('suggestedNewCount', () => {
     expect(suggestedNewCount(150, 5)).toBeNull()
   })
 })
+
+describe('dueQueue priority (mistakes notebook)', () => {
+  it('puts mistake words before other due words, after relearning ones', () => {
+    const items = [
+      { wordId: 'old', srs: at(1, { due: addDays(today, -3) }) },
+      { wordId: 'mistake', srs: at(0, { due: today }) },
+      { wordId: 'relearn', srs: at(0, { due: today, relearning: true }) },
+    ]
+    expect(dueQueue(items, today, new Set(['mistake'])).map((i) => i.wordId)).toEqual(['relearn', 'mistake', 'old'])
+  })
+})
+
+describe('relapse', async () => {
+  const { relapse } = await import('./srs')
+  it('sends a word back to stage 0, due tomorrow, and un-masters it', () => {
+    const mastered = { ...at(LAST_STAGE), mastered: true, due: null, lapses: 1 }
+    expect(relapse(mastered, today)).toMatchObject({ stage: 0, due: addDays(today, 1), mastered: false, lapses: 2 })
+  })
+  it('starts learning a word that had no state (known implicitly)', () => {
+    expect(relapse(undefined, today)).toMatchObject({ stage: 0, due: addDays(today, 1), lapses: 0 })
+  })
+})

@@ -28,6 +28,37 @@ export interface Settings {
   storyMode: StoryMode
 }
 
+export type QuizKind = 'daily' | 'weekly' | 'level' | 'mistakes'
+
+/** دفتر الأخطاء: كلمة أخطأ فيها المتعلم في اختبار أو نسيها في مراجعة. */
+export interface MistakeRow {
+  wordId: string
+  count: number
+  firstAt: DayKey
+  lastAt: DayKey
+  source: QuizKind | 'review'
+  /** يوم تصحيحها؛ غياب القيمة يعني أنها ما زالت في الدفتر. */
+  resolvedAt?: DayKey
+}
+
+export interface QuizRow {
+  id?: number
+  kind: QuizKind
+  date: DayKey
+  level?: Level
+  total: number
+  correct: number
+  wrongIds: string[]
+}
+
+/** نشاط يومي لحساب سلسلة الأيام المتتالية. */
+export interface ActivityRow {
+  date: DayKey
+  cards: number
+  reviews: number
+  quizzes: number
+}
+
 export interface MetaRow {
   key: string
   value: unknown
@@ -39,6 +70,9 @@ export const db = new Dexie('siyaq') as Dexie & {
   settings: EntityTable<Settings, 'id'>
   plans: EntityTable<DayPlan, 'date'>
   meta: EntityTable<MetaRow, 'key'>
+  mistakes: EntityTable<MistakeRow, 'wordId'>
+  quizzes: EntityTable<QuizRow, 'id'>
+  activity: EntityTable<ActivityRow, 'date'>
 }
 
 db.version(1).stores({
@@ -47,6 +81,12 @@ db.version(1).stores({
   settings: 'id',
   plans: 'date',
   meta: 'key',
+})
+
+db.version(2).stores({
+  mistakes: 'wordId, lastAt',
+  quizzes: '++id, kind, date',
+  activity: 'date',
 })
 
 export const DEFAULT_SETTINGS: Settings = {

@@ -1,11 +1,14 @@
 import { useEffect } from 'react'
 import { Button, Card, LevelBadge, ProgressBar, Screen } from '../components/ui'
 import { syncTodayPlan } from '../db/actions'
-import { useLoadInfo, useStats, useTodayPlan } from '../db/hooks'
+import type { QuizKind } from '../db/db'
+import { useLoadInfo, useQuizzes, useStats, useStreak, useTodayPlan } from '../db/hooks'
+import { toDayKey } from '../lib/dates'
 import { formatWords } from '../lib/format'
+import { weeklyDue } from '../lib/selection'
 import { suggestedNewCount } from '../lib/srs'
 
-type Go = (screen: 'learn' | 'review' | 'settings') => void
+type Go = (screen: 'learn' | 'review' | 'settings' | 'progress' | 'mistakes') => void
 
 function Step({
   index,
@@ -39,22 +42,27 @@ function Step({
   )
 }
 
-export function Home({ go }: { go: Go }) {
+export function Home({ go, startQuiz }: { go: Go; startQuiz: (kind: QuizKind) => void }) {
   const stats = useStats()
   const plan = useTodayPlan()
   const info = useLoadInfo()
+  const streak = useStreak()
+  const quizzes = useQuizzes()
 
   useEffect(() => {
     void syncTodayPlan()
   }, [])
 
-  if (!stats) return null
-  const { known, total, levels, due, settings } = stats
+  if (!stats || !quizzes) return null
+  const { known, total, levels, due, settings, mistakes } = stats
   const newTotal = plan?.wordIds.length ?? 0
   const newDone = plan?.doneIds.length ?? 0
   const suggestion = suggestedNewCount(due.length, plan?.targetCount ?? settings.dailyCount)
   const reviewsDone = due.length === 0
   const newWordsDone = newTotal > 0 && newDone >= newTotal
+  const quizReady = newDone > 0 && newDone >= newTotal
+  const lastWeekly = quizzes.find((q) => q.kind === 'weekly')?.date
+  const showWeekly = weeklyDue(stats.progress, lastWeekly, toDayKey())
 
   return (
     <Screen>
@@ -63,9 +71,19 @@ export function Home({ go }: { go: Go }) {
           <span className="text-2xl font-bold text-teal-700 dark:text-teal-400">سياق</span>
           <LevelBadge level={settings.startLevel!} />
         </div>
-        <Button variant="ghost" onClick={() => go('settings')}>
-          <span aria-hidden="true">⚙︎</span> الإعدادات
-        </Button>
+        <nav className="flex items-center gap-1" aria-label="التنقل">
+          {streak && streak.current > 0 && (
+            <span className="me-1 text-sm font-semibold text-amber-700 dark:text-amber-400" title="أيام متتالية">
+              🔥 {streak.current}
+            </span>
+          )}
+          <Button variant="ghost" onClick={() => go('progress')}>
+            تقدّمي
+          </Button>
+          <Button variant="ghost" onClick={() => go('settings')} aria-label="الإعدادات">
+            <span aria-hidden="true">⚙︎</span>
+          </Button>
+        </nav>
       </header>
 
       <Card className="mb-4 text-center">
@@ -135,9 +153,50 @@ export function Home({ go }: { go: Go }) {
             }
           />
           <Step index={3} title="قصة اليوم" detail="قريبًا — قصة قصيرة من كلمات اليوم مع الاستماع" />
-          <Step index={4} title="الاختبار الشامل" detail="قريبًا — اختبار يغطي كل كلمات اليوم" />
+          <Step
+            index={4}
+            title="الاختبار الشامل"
+            detail={
+              plan?.quiz
+                ? `نتيجتك: ${plan.quiz.correct} من ${plan.quiz.total}`
+                : quizReady
+                  ? `يغطي ${formatWords(newDone)} تعلّمتها اليوم`
+                  : 'يُفتح بعد إنهاء كلمات اليوم'
+            }
+            done={!!plan?.quiz}
+            action={
+              quizReady && (
+                <Button variant={plan?.quiz ? 'secondary' : 'primary'} onClick={() => startQuiz('daily')}>
+                  {plan?.quiz ? 'أعده' : 'ابدأ'}
+                </Button>
+              )
+            }
+          />
         </ol>
       </Card>
+
+      {(mistakes.length > 0 || showWeekly) && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {showWeekly && (
+            <Card>
+              <h2 className="font-bold">حان الاختبار الأسبوعي</h2>
+              <p className="mb-3 text-sm text-slate-500">اختبار خفيف لكلمات هذا الأسبوع.</p>
+              <Button variant="secondary" onClick={() => startQuiz('weekly')}>
+                ابدأ
+              </Button>
+            </Card>
+          )}
+          {mistakes.length > 0 && (
+            <Card>
+              <h2 className="font-bold">دفتر الأخطاء</h2>
+              <p className="mb-3 text-sm text-slate-500">{formatWords(mistakes.length)} تنتظر التصحيح.</p>
+              <Button variant="secondary" onClick={() => go('mistakes')}>
+                افتح الدفتر
+              </Button>
+            </Card>
+          )}
+        </div>
+      )}
     </Screen>
   )
 }
