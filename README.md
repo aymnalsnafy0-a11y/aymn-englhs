@@ -20,6 +20,9 @@ npm run build      # فحص الأنواع + بناء PWA في dist/
   (مثل `people`, `food`, `travel`… انظر `src/lib/topics.ts`).
 - القائمة الكاملة ملك لمطبعة جامعة أكسفورد: **لا تُكشط ولا تُرفع إلى git** (الملف مُدرج في `.gitignore`).
   ضعها بنفسك في `data/oxford5000.csv` ثم أعد تشغيل `npm run dev`.
+- لتحويل ملفَّي PDF الرسميين (Oxford 3000 by CEFR level و Oxford 5000) إلى هذا الملف:
+  `python3 scripts/oxford_pdf_to_csv.py "The_Oxford_3000_by_CEFR_level.pdf" "American_Oxford_5000.pdf"`
+  (يحتاج `pdftotext`). الكلمة التي لها معانٍ أو أنواع في مستويات مختلفة تظهر في أكثر من سطر.
 - الترتيب: المستوى أولًا (صارم)، ثم مجموعات المواضيع (عائلة، طعام، سفر…)، لا ترتيب أبجدي.
 
 ## البنية

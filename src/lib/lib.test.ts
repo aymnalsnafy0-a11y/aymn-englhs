@@ -55,6 +55,21 @@ describe('buildWordList', () => {
     ])
   })
 
+  it('groups later senses of a basic word by part of speech, not by its basic topic', () => {
+    const later = buildWordList([
+      { word: 'water', level: 'A1', pos: 'noun' },
+      { word: 'pour', level: 'B1', pos: 'verb' },
+      { word: 'water', level: 'B1', pos: 'verb' },
+      { word: 'kitchen', level: 'B1', pos: 'noun' },
+    ])
+    expect(later.map((w) => `${w.level}:${w.word}:${w.topic}`)).toEqual([
+      'A1:water:food',
+      'B1:kitchen:home',
+      'B1:pour:actions',
+      'B1:water:actions',
+    ])
+  })
+
   it('assigns sequential order', () => {
     expect(list.map((w) => w.order)).toEqual([0, 1, 2, 3, 4, 5])
   })
