@@ -1,0 +1,13 @@
+node_modules
+dist
+dev-dist
+*.local
+.DS_Store
+
+# أسرار ومفاتيح — لا تُرفع أبدًا
+.env
+.env.*
+!.env.example
+
+# قائمة أكسفورد الكاملة ملك لمطبعة جامعة أكسفورد — يضعها المستخدم محليًا فقط
+data/oxford5000.csv

@@ -1,0 +1,45 @@
+@import 'tailwindcss';
+
+/* الوضع الداكن يُتحكم به بالفئة .dark على <html> (نظام/فاتح/داكن من الإعدادات). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-ar: 'Readex Pro', system-ui, sans-serif;
+  --font-en: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply bg-slate-50 font-ar text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  }
+  /* تركيز لوحة مفاتيح واضح في كل مكان */
+  :focus-visible {
+    @apply outline-3 outline-offset-2 outline-amber-500;
+  }
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  .font-en {
+    font-family: var(--font-en);
+  }
+  .caret-blink {
+    animation: caret-blink 1s step-end infinite;
+  }
+  @keyframes caret-blink {
+    50% {
+      opacity: 0;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret-blink {
+    animation: none;
+  }
+}
