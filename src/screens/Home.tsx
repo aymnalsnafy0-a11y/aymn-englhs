@@ -2,13 +2,13 @@ import { useEffect } from 'react'
 import { Button, Card, LevelBadge, ProgressBar, Screen } from '../components/ui'
 import { syncTodayPlan } from '../db/actions'
 import type { QuizKind } from '../db/db'
-import { useLoadInfo, useQuizzes, useStats, useStreak, useTodayPlan } from '../db/hooks'
+import { useLoadInfo, useQuizzes, useStats, useStreak, useTodayPlan, useTodayStory } from '../db/hooks'
 import { toDayKey } from '../lib/dates'
 import { formatWords } from '../lib/format'
 import { weeklyDue } from '../lib/selection'
 import { suggestedNewCount } from '../lib/srs'
 
-type Go = (screen: 'learn' | 'review' | 'settings' | 'progress' | 'mistakes') => void
+type Go = (screen: 'learn' | 'review' | 'settings' | 'progress' | 'mistakes' | 'library') => void
 
 function Step({
   index,
@@ -42,12 +42,21 @@ function Step({
   )
 }
 
-export function Home({ go, startQuiz }: { go: Go; startQuiz: (kind: QuizKind) => void }) {
+export function Home({
+  go,
+  startQuiz,
+  openStory,
+}: {
+  go: Go
+  startQuiz: (kind: QuizKind) => void
+  openStory: () => void
+}) {
   const stats = useStats()
   const plan = useTodayPlan()
   const info = useLoadInfo()
   const streak = useStreak()
   const quizzes = useQuizzes()
+  const story = useTodayStory()
 
   useEffect(() => {
     void syncTodayPlan()
@@ -152,7 +161,25 @@ export function Home({ go, startQuiz }: { go: Go; startQuiz: (kind: QuizKind) =>
               )
             }
           />
-          <Step index={3} title="قصة اليوم" detail="قريبًا — قصة قصيرة من كلمات اليوم مع الاستماع" />
+          <Step
+            index={3}
+            title="قصة اليوم"
+            detail={
+              story
+                ? story.titleAr
+                : quizReady
+                  ? 'قصة قصيرة من كلمات اليوم مع الاستماع'
+                  : 'تُكتب بعد إنهاء كلمات اليوم'
+            }
+            done={!!story?.answers}
+            action={
+              (quizReady || story) && (
+                <Button variant={story?.answers ? 'secondary' : 'primary'} onClick={openStory}>
+                  {story ? 'اقرأ' : 'اكتبها'}
+                </Button>
+              )
+            }
+          />
           <Step
             index={4}
             title="الاختبار الشامل"
@@ -166,7 +193,7 @@ export function Home({ go, startQuiz }: { go: Go; startQuiz: (kind: QuizKind) =>
             done={!!plan?.quiz}
             action={
               quizReady && (
-                <Button variant={plan?.quiz ? 'secondary' : 'primary'} onClick={() => startQuiz('daily')}>
+                <Button variant={plan?.quiz || !story?.answers ? 'secondary' : 'primary'} onClick={() => startQuiz('daily')}>
                   {plan?.quiz ? 'أعده' : 'ابدأ'}
                 </Button>
               )

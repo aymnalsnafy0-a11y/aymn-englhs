@@ -11,11 +11,16 @@ import { SettingsScreen } from './screens/Settings'
 import { Mistakes } from './screens/Mistakes'
 import { Progress } from './screens/Progress'
 import { Quiz } from './screens/Quiz'
+import { StoryScreen } from './screens/Story'
+import { StoryLibrary } from './screens/StoryLibrary'
 import type { QuizKind, Theme } from './db/db'
 import type { Level } from './lib/types'
 
-type Page = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily' | 'progress' | 'mistakes'
-type Route = { page: Page } | { page: 'quiz'; kind: QuizKind; level?: Level; back: Page }
+type Page = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily' | 'progress' | 'mistakes' | 'library'
+type Route =
+  | { page: Page }
+  | { page: 'quiz'; kind: QuizKind; level?: Level; back: Page }
+  | { page: 'story'; storyId?: number; back: Page }
 
 function useTheme(theme: Theme | undefined) {
   useEffect(() => {
@@ -76,6 +81,17 @@ export default function App() {
       return <Review onExit={home} />
     case 'quiz':
       return <Quiz key={`${route.kind}-${route.level}`} kind={route.kind} level={route.level} onExit={() => go(route.back)} />
+    case 'story':
+      return (
+        <StoryScreen
+          key={route.storyId ?? 'today'}
+          storyId={route.storyId}
+          onBack={() => go(route.back)}
+          openLibrary={() => go('library')}
+        />
+      )
+    case 'library':
+      return <StoryLibrary onBack={home} open={(storyId) => setRoute({ page: 'story', storyId, back: 'library' })} />
     case 'progress':
       return <Progress onBack={home} startQuiz={quiz('progress')} openMistakes={() => go('mistakes')} />
     case 'mistakes':
@@ -87,6 +103,6 @@ export default function App() {
     case 'daily':
       return <DailyCount onDone={() => go('settings')} onBack={() => go('settings')} />
     default:
-      return <Home go={go} startQuiz={quiz('home')} />
+      return <Home go={go} startQuiz={quiz('home')} openStory={() => setRoute({ page: 'story', back: 'home' })} />
   }
 }

@@ -409,6 +409,13 @@ export const SAMPLE_CONTENT: Record<string, WordContent> = {
   ]),
 }
 
+const BY_WORD = new Map<string, WordContent>()
+for (const [key, value] of Object.entries(SAMPLE_CONTENT)) {
+  const word = key.split('|')[0]
+  if (!BY_WORD.has(word)) BY_WORD.set(word, value)
+}
+
+/** بالمعرّف أولًا؛ ثم بالكلمة وحدها لأن القائمة الكاملة قد تجمع الأنواع ("noun, adjective"). */
 export function contentFor(id: string): WordContent | undefined {
-  return SAMPLE_CONTENT[id]
+  return SAMPLE_CONTENT[id] ?? BY_WORD.get(id.split('|')[0])
 }

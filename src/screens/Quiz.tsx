@@ -3,7 +3,7 @@ import { Button, Card, En, LevelBadge, ProgressBar, Screen, SpeakButtons } from 
 import { DISTRACTOR_MEANINGS, contentFor, quizWordFor } from '../data/content'
 import { saveQuizResult, updateSettings } from '../db/actions'
 import type { QuizKind } from '../db/db'
-import { useStats, useTodayPlan } from '../db/hooks'
+import { useStats, useTodayPlan, useTodayStory } from '../db/hooks'
 import { toDayKey } from '../lib/dates'
 import { formatWords } from '../lib/format'
 import { buildQuiz, grade, passed, score, type Grade, type Question, type QuestionType } from '../lib/quiz'
@@ -289,15 +289,20 @@ function useQuizWords(kind: QuizKind, level?: Level): Word[] | undefined {
 
 export function Quiz({ kind, level, onExit }: { kind: QuizKind; level?: Level; onExit: () => void }) {
   const words = useQuizWords(kind, level)
+  const story = useTodayStory()
+  const storySentences =
+    kind === 'daily' && story?.kind === 'advanced'
+      ? story.sentences.map((s) => ({ en: s.text, ar: s.translation }))
+      : []
   const [attempt, setAttempt] = useState(0)
   const [questions, setQuestions] = useState<Question[]>()
   const [correctness, setCorrectness] = useState<boolean[]>([])
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    if (!words) return
+    if (!words || story === undefined || questions) return
     setQuestions(
-      buildQuiz(words.map(quizWordFor), {
+      buildQuiz(words.map((w) => quizWordFor(w, storySentences)), {
         speech: speechSupported(),
         types: kind === 'weekly' ? LIGHT_TYPES : undefined,
         distractorPool: DISTRACTOR_MEANINGS,
@@ -305,7 +310,7 @@ export function Quiz({ kind, level, onExit }: { kind: QuizKind; level?: Level; o
     )
     setCorrectness([])
     setSaved(false)
-  }, [words, attempt, kind])
+  }, [words, attempt, kind, story, questions])
 
   function exit() {
     stopSpeaking()
@@ -347,7 +352,10 @@ export function Quiz({ kind, level, onExit }: { kind: QuizKind; level?: Level; o
           questions={questions}
           correctness={correctness}
           onExit={exit}
-          onRetry={() => setAttempt((a) => a + 1)}
+          onRetry={() => {
+            setQuestions(undefined)
+            setAttempt((a) => a + 1)
+          }}
         />
       ) : (
         <>

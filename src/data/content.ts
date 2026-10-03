@@ -8,13 +8,17 @@ import { SAMPLE_CONTENT, contentFor } from './sampleContent'
  */
 export { contentFor }
 
-export function quizWordFor(word: Word): QuizWord {
+/**
+ * storySentences: جمل قصة اليوم الإنجليزية (القصص المتقدمة) تُستخدم أولًا في «أكمل الجملة».
+ * جمل قصص المبتدئ لا تُستخدم لأن ترجمتها الإنجليزية تكشف الإجابة.
+ */
+export function quizWordFor(word: Word, storySentences: { en: string; ar: string }[] = []): QuizWord {
   const content = contentFor(word.id)
   return {
     id: word.id,
     word: word.word,
     meaningAr: content?.meaningAr,
-    sentences: content?.examples ?? [],
+    sentences: [...storySentences, ...(content?.examples ?? [])],
   }
 }
 

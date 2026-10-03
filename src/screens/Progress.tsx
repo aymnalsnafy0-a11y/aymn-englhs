@@ -53,7 +53,7 @@ export function Progress({
   const stageCounts = INTERVALS.map((_, i) => learning.filter((p) => p.srs?.stage === i).length)
   const ladder = [...stageCounts.map((n, i) => ({ label: STAGE_LABEL[i], n })), { label: 'محفوظة', n: mastered }]
   const ladderMax = Math.max(1, ...ladder.map((s) => s.n))
-  const byDay = new Map(activity.map((a) => [a.date, a.cards + a.reviews + a.quizzes]))
+  const byDay = new Map(activity.map((a) => [a.date, a.cards + a.reviews + a.quizzes + (a.stories ?? 0)]))
   const days = Array.from({ length: 28 }, (_, i) => addDays(today, i - 27))
   const pct = stats.total ? Math.round((stats.known / stats.total) * 100) : 0
   const weeklyReady = weeklyCandidates(stats.progress, today).length >= WEEKLY_MIN

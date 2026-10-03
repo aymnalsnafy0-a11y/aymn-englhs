@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from 'dexie'
 import type { DayKey } from '../lib/dates'
 import type { DayPlan, ProgressStatus } from '../lib/plan'
 import type { SrsState } from '../lib/srs'
+import type { StoryKind, StorySentence } from '../lib/storyText'
 import type { Level, Word } from '../lib/types'
 
 export interface ProgressRow {
@@ -57,6 +58,34 @@ export interface ActivityRow {
   cards: number
   reviews: number
   quizzes: number
+  stories?: number
+}
+
+export interface StoryQuestion {
+  question: string
+  options: string[]
+  answer: number
+}
+
+/** قصة يوم محفوظة — تُولَّد مرة واحدة وتبقى في المكتبة. */
+export interface StoryRow {
+  id?: number
+  date: DayKey
+  episode: number
+  mode: StoryMode
+  kind: StoryKind
+  level: Level
+  title: string
+  titleAr: string
+  sentences: StorySentence[]
+  questions: StoryQuestion[]
+  summary: string
+  wordIds: string[]
+  reviewWordIds: string[]
+  /** كلمات لم يستخدمها النموذج رغم الطلب. */
+  missing: string[]
+  /** إجابات أسئلة الفهم (فهرس الخيار لكل سؤال). */
+  answers?: number[]
 }
 
 export interface MetaRow {
@@ -73,6 +102,7 @@ export const db = new Dexie('siyaq') as Dexie & {
   mistakes: EntityTable<MistakeRow, 'wordId'>
   quizzes: EntityTable<QuizRow, 'id'>
   activity: EntityTable<ActivityRow, 'date'>
+  stories: EntityTable<StoryRow, 'id'>
 }
 
 db.version(1).stores({
@@ -87,6 +117,10 @@ db.version(2).stores({
   mistakes: 'wordId, lastAt',
   quizzes: '++id, kind, date',
   activity: 'date',
+})
+
+db.version(3).stores({
+  stories: '++id, date, mode',
 })
 
 export const DEFAULT_SETTINGS: Settings = {

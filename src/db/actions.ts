@@ -3,7 +3,10 @@ import { reconcilePlan, type ProgressStatus } from '../lib/plan'
 import type { QuizScore } from '../lib/quiz'
 import { relapse, review, startLearning, type Rating } from '../lib/srs'
 import type { Level } from '../lib/types'
-import { db, DEFAULT_SETTINGS, type ActivityRow, type MistakeRow, type QuizKind, type Settings } from './db'
+import { contentFor } from '../data/content'
+import { shuffle } from '../lib/quiz'
+import { storyKindFor } from '../lib/storyText'
+import { db, DEFAULT_SETTINGS, type ActivityRow, type MistakeRow, type QuizKind, type Settings, type StoryRow } from './db'
 
 export async function getSettings(): Promise<Settings> {
   return (await db.settings.get('main')) ?? DEFAULT_SETTINGS
@@ -42,7 +45,7 @@ export async function syncTodayPlan(targetCount?: number) {
 async function bumpActivity(field: keyof Omit<ActivityRow, 'date'>): Promise<void> {
   const date = toDayKey()
   const row = (await db.activity.get(date)) ?? { date, cards: 0, reviews: 0, quizzes: 0 }
-  await db.activity.put({ ...row, [field]: row[field] + 1 })
+  await db.activity.put({ ...row, [field]: (row[field] ?? 0) + 1 })
 }
 
 async function addMistake(wordId: string, source: MistakeRow['source'], today: DayKey): Promise<void> {
@@ -145,4 +148,96 @@ export async function saveQuizResult(kind: QuizKind, result: QuizScore, correctI
 
 export async function chooseStartLevel(level: Level): Promise<void> {
   await updateSettings({ startLevel: level })
+}
+
+// ——— قصة اليوم ———
+
+export const REVIEW_WORDS_IN_STORY = 5
+
+/** خطأ برمز يُترجم في الواجهة (not_configured, unavailable, network, no_words…). */
+export class StoryRequestError extends Error {
+  constructor(readonly code: string) {
+    super(code)
+  }
+}
+
+/**
+ * يولّد قصة اليوم من الكلمات التي أنهاها المتعلم اليوم وبعض كلمات المراجعة.
+ * القصة تُخزَّن ولا يُعاد توليدها؛ استدعاء ثانٍ في نفس اليوم يعيد المحفوظة.
+ */
+export async function requestTodayStory(): Promise<StoryRow> {
+  const today = toDayKey()
+  const existing = await db.stories.where('date').equals(today).first()
+  if (existing) return existing
+
+  const settings = await getSettings()
+  const plan = await db.plans.get(today)
+  if (!settings.startLevel || !plan || plan.doneIds.length === 0) throw new StoryRequestError('no_words')
+
+  const words = (await db.words.bulkGet(plan.doneIds)).filter((w) => !!w)
+  const learned = await db.progress.where('status').equals('learning').toArray()
+  const reviewIds = shuffle(
+    learned.filter((p) => p.learnedAt && p.learnedAt < today).map((p) => p.wordId),
+    Math.random,
+  ).slice(0, REVIEW_WORDS_IN_STORY)
+  const reviewWords = (await db.words.bulkGet(reviewIds)).filter((w) => !!w)
+  const serial = (await db.stories.where('mode').equals('serial').sortBy('id'))
+  const mode = settings.storyMode
+  const kind = storyKindFor(settings.startLevel)
+  const toPayload = (w: { id: string; word: string; pos: string }) => ({
+    word: w.word,
+    pos: w.pos,
+    meaningAr: contentFor(w.id)?.meaningAr,
+  })
+
+  let response: Response
+  try {
+    response = await fetch('/api/story', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        kind,
+        level: settings.startLevel,
+        mode,
+        episode: mode === 'serial' ? serial.length + 1 : 1,
+        words: words.map(toPayload),
+        reviewWords: reviewWords.map(toPayload),
+        previous: mode === 'serial' ? serial.slice(-3).map((s) => s.summary) : [],
+      }),
+    })
+  } catch {
+    throw new StoryRequestError('network')
+  }
+  const data = await response.json().catch(() => null)
+  if (!response.ok || !data?.story) throw new StoryRequestError(data?.error ?? 'network')
+
+  const story: StoryRow = {
+    date: today,
+    episode: mode === 'serial' ? serial.length + 1 : 1,
+    mode,
+    kind,
+    level: settings.startLevel,
+    title: data.story.title,
+    titleAr: data.story.titleAr,
+    sentences: data.story.sentences,
+    questions: data.story.questions,
+    summary: data.story.summary,
+    wordIds: words.map((w) => w.id),
+    reviewWordIds: reviewWords.map((w) => w.id),
+    missing: data.missing ?? [],
+  }
+  // إن ولّد تبويب آخر قصة اليوم في نفس الوقت نحتفظ بالأولى.
+  return db.transaction('rw', db.stories, async () => {
+    const raced = await db.stories.where('date').equals(today).first()
+    if (raced) return raced
+    const id = await db.stories.add(story)
+    return { ...story, id }
+  })
+}
+
+export async function saveStoryAnswers(id: number, answers: number[]): Promise<void> {
+  await db.transaction('rw', db.stories, db.activity, async () => {
+    await db.stories.update(id, { answers })
+    await bumpActivity('stories')
+  })
 }

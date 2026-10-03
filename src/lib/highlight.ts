@@ -8,10 +8,19 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-export function splitHighlight(sentence: string, word: string): Segment[] {
+/** جذع بسيط يلتقط التصريفات الشائعة: arrive ← arriv(ed)، happy ← happ(ily). */
+export function wordStem(word: string): string {
   const lower = word.toLowerCase()
-  const stem = lower.length > 3 ? lower.replace(/(e|y)$/, '') : lower
-  const re = new RegExp(`\\b${escapeRegExp(stem)}[a-z]*`, 'gi')
+  return lower.length > 3 ? lower.replace(/(e|y)$/, '') : lower
+}
+
+/** هل الكلمة المكتوبة صيغة من الكلمة المستهدفة؟ */
+export function isFormOf(token: string, word: string): boolean {
+  return new RegExp(`^${escapeRegExp(wordStem(word))}[a-z]*$`, 'i').test(token.replace(/[’']/g, "'"))
+}
+
+export function splitHighlight(sentence: string, word: string): Segment[] {
+  const re = new RegExp(`\\b${escapeRegExp(wordStem(word))}[a-z]*`, 'gi')
   const segments: Segment[] = []
   let last = 0
   for (const m of sentence.matchAll(re)) {

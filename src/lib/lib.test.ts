@@ -196,3 +196,11 @@ describe('format', async () => {
     expect(posLabel('noun, verb')).toBe('اسم، فعل')
   })
 })
+
+describe('contentFor', async () => {
+  const { contentFor } = await import('../data/sampleContent')
+  it('falls back to the headword when the full list combines parts of speech', () => {
+    expect(contentFor('family|noun, adjective')?.meaningAr).toBe('عائلة')
+    expect(contentFor('zzz|noun')).toBeUndefined()
+  })
+})

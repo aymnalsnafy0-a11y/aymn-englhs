@@ -76,3 +76,15 @@ export function useStats() {
     return { ...summarize(words, map, settings.startLevel), due, words, settings, progress, progressMap: map, mistakes }
   }, [words, progress, settings, mistakes, map])
 }
+
+export function useStories() {
+  return useLiveQuery(() => db.stories.orderBy('id').reverse().toArray())
+}
+
+export function useStory(id: number | undefined) {
+  return useLiveQuery(async () => (id === undefined ? null : ((await db.stories.get(id)) ?? null)), [id])
+}
+
+export function useTodayStory() {
+  return useLiveQuery(async () => (await db.stories.where('date').equals(toDayKey()).first()) ?? null)
+}
