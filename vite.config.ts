@@ -4,12 +4,16 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig({
+// وضع artifact: نسخة للمعاينة على claude.ai — مسارات نسبية وبدون service worker.
+export default defineConfig(({ mode }) => ({
+  base: mode === 'artifact' ? './' : '/',
+  build: mode === 'artifact' ? { outDir: 'dist-artifact' } : undefined,
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      disable: mode === 'artifact',
       includeAssets: ['icon.svg'],
       manifest: {
         name: 'سياق — كلمات أكسفورد 5000',
@@ -29,4 +33,4 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts'],
   },
-})
+}))

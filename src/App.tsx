@@ -21,7 +21,10 @@ function useTheme(theme: Theme | undefined) {
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const apply = () => {
-      const dark = theme === 'dark' || ((theme ?? 'system') === 'system' && media.matches)
+      // «حسب الجهاز»: نحترم أيضًا سمة الصفحة المضيفة إن وُجدت (data-theme).
+      const host = document.documentElement.getAttribute('data-theme')
+      const systemDark = host ? host === 'dark' : media.matches
+      const dark = theme === 'dark' || ((theme ?? 'system') === 'system' && systemDark)
       document.documentElement.classList.toggle('dark', dark)
     }
     apply()
