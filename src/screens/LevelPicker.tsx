@@ -14,7 +14,15 @@ const LEVEL_INFO: Record<Level, { title: string; description: string; official: 
   C1: { title: 'متقدم', description: 'مفردات أكاديمية ومهنية لفهم النصوص المعقّدة.', official: 2000 },
 }
 
-export function LevelPicker({ onDone, onBack }: { onDone: () => void; onBack?: () => void }) {
+export function LevelPicker({
+  onDone,
+  onBack,
+  onPlacement,
+}: {
+  onDone: () => void
+  onBack?: () => void
+  onPlacement: () => void
+}) {
   const words = useWords()
   const settings = useSettings()
   const info = useLoadInfo()
@@ -102,8 +110,8 @@ export function LevelPicker({ onDone, onBack }: { onDone: () => void; onBack?: (
               اختبار تحديد مستوى (حوالي 5 دقائق) يقترح عليك مستوى، والقرار لك.
             </p>
           </div>
-          <Button variant="secondary" disabled title="قريبًا">
-            اختبار تحديد المستوى (قريبًا)
+          <Button variant="secondary" onClick={onPlacement}>
+            اختبار تحديد المستوى
           </Button>
         </div>
       </Card>

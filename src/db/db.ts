@@ -3,6 +3,7 @@ import type { DayKey } from '../lib/dates'
 import type { DayPlan, ProgressStatus } from '../lib/plan'
 import type { SrsState } from '../lib/srs'
 import type { StoryKind, StorySentence } from '../lib/storyText'
+import type { WordContent } from '../data/sampleContent'
 import type { Level, Word } from '../lib/types'
 
 export interface ProgressRow {
@@ -88,6 +89,20 @@ export interface StoryRow {
   answers?: number[]
 }
 
+/** محتوى كلمة مولَّد بالذكاء الاصطناعي — يُخزَّن مرة واحدة ولا يُعاد توليده. */
+export interface ContentRow {
+  wordId: string
+  content: WordContent
+  model: string
+  createdAt: number
+}
+
+/** مجموعة الموضوع لكل كلمة (من التصنيف بالذكاء الاصطناعي) لترتيب الكلمات داخل المستوى. */
+export interface TopicRow {
+  wordId: string
+  topic: string
+}
+
 export interface MetaRow {
   key: string
   value: unknown
@@ -103,6 +118,8 @@ export const db = new Dexie('siyaq') as Dexie & {
   quizzes: EntityTable<QuizRow, 'id'>
   activity: EntityTable<ActivityRow, 'date'>
   stories: EntityTable<StoryRow, 'id'>
+  content: EntityTable<ContentRow, 'wordId'>
+  topics: EntityTable<TopicRow, 'wordId'>
 }
 
 db.version(1).stores({
@@ -121,6 +138,11 @@ db.version(2).stores({
 
 db.version(3).stores({
   stories: '++id, date, mode',
+})
+
+db.version(4).stores({
+  content: 'wordId',
+  topics: 'wordId',
 })
 
 export const DEFAULT_SETTINGS: Settings = {

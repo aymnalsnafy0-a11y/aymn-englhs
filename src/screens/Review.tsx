@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button, Card, En, LevelBadge, ProgressBar, Screen, SpeakButtons } from '../components/ui'
-import { contentFor } from '../data/sampleContent'
+import { contentFor, ensureContent } from '../data/content'
 import { recordReview } from '../db/actions'
 import { useStats } from '../db/hooks'
 import { stopSpeaking } from '../lib/speech'
@@ -25,6 +25,8 @@ export function Review({ onExit }: { onExit: () => void }) {
       const ids = stats.due.map((p) => p.wordId)
       setQueue(ids)
       setInitial(ids.length)
+      const byId = new Map(stats.words.map((w) => [w.id, w]))
+      void ensureContent(ids.map((id) => byId.get(id)).filter((w) => !!w))
     }
   }, [stats, queue])
 

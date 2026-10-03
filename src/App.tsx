@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Screen } from './components/ui'
 import { useSettings } from './db/hooks'
 import { loadWords } from './db/loader'
+import { loadStoredContent, useContentVersion } from './data/content'
 import { DailyCount } from './screens/DailyCount'
 import { Home } from './screens/Home'
 import { Learn } from './screens/Learn'
@@ -11,12 +12,13 @@ import { SettingsScreen } from './screens/Settings'
 import { Mistakes } from './screens/Mistakes'
 import { Progress } from './screens/Progress'
 import { Quiz } from './screens/Quiz'
+import { Placement } from './screens/Placement'
 import { StoryScreen } from './screens/Story'
 import { StoryLibrary } from './screens/StoryLibrary'
 import type { QuizKind, Theme } from './db/db'
 import type { Level } from './lib/types'
 
-type Page = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily' | 'progress' | 'mistakes' | 'library'
+type Page = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily' | 'progress' | 'mistakes' | 'library' | 'placement'
 type Route =
   | { page: Page }
   | { page: 'quiz'; kind: QuizKind; level?: Level; back: Page }
@@ -44,9 +46,12 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [route, setRoute] = useState<Route>({ page: 'home' })
   useTheme(settings?.theme)
+  // إعادة الرسم عند وصول محتوى كلمات مولَّد.
+  useContentVersion()
 
   useEffect(() => {
     loadWords()
+      .then(loadStoredContent)
       .then(() => setLoaded(true))
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
@@ -71,7 +76,13 @@ export default function App() {
   const home = () => go('home')
   const quiz = (back: Page) => (kind: QuizKind, level?: Level) => setRoute({ page: 'quiz', kind, level, back })
 
-  if (!settings.startLevel) return <LevelPicker onDone={home} />
+  if (!settings.startLevel) {
+    return route.page === 'placement' ? (
+      <Placement onBack={home} onChosen={home} />
+    ) : (
+      <LevelPicker onDone={home} onPlacement={() => go('placement')} />
+    )
+  }
   if (!settings.onboarded) return <DailyCount onDone={home} />
 
   switch (route.page) {
@@ -99,7 +110,11 @@ export default function App() {
     case 'settings':
       return <SettingsScreen go={go} onBack={home} />
     case 'levels':
-      return <LevelPicker onDone={() => go('settings')} onBack={() => go('settings')} />
+      return (
+        <LevelPicker onDone={() => go('settings')} onBack={() => go('settings')} onPlacement={() => go('placement')} />
+      )
+    case 'placement':
+      return <Placement onBack={() => go('levels')} onChosen={() => go('settings')} />
     case 'daily':
       return <DailyCount onDone={() => go('settings')} onBack={() => go('settings')} />
     default:

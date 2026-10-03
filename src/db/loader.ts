@@ -1,5 +1,6 @@
 import { parseWordList } from '../lib/csv'
 import { buildWordList } from '../lib/words'
+import { wordId } from '../lib/types'
 import { db } from './db'
 
 /**
@@ -30,8 +31,10 @@ export async function loadWords(): Promise<LoadInfo> {
   const text = await loader()
   const source = key === FULL ? 'oxford5000' : 'sample'
   const { words: raw, errors } = parseWordList(text)
-  const words = buildWordList(raw)
-  const signature = `${source}:${words.length}:${hash(text)}`
+  // تصنيفات المواضيع المحفوظة (من الذكاء الاصطناعي) تحدد ترتيب المجموعات داخل المستوى.
+  const topics = new Map((await db.topics.toArray()).map((t) => [t.wordId, t.topic]))
+  const words = buildWordList(raw.map((r) => ({ ...r, topic: r.topic ?? topics.get(wordId(r.word, r.pos)) })))
+  const signature = `${source}:${words.length}:${hash(text)}:${topics.size}`
 
   const stored = await db.meta.get('wordsSignature')
   if (stored?.value !== signature) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button, Card, En, LevelBadge, ProgressBar, Screen, SpeakButtons } from '../components/ui'
-import { DISTRACTOR_MEANINGS, contentFor, quizWordFor } from '../data/content'
+import { contentFor, distractorMeanings, ensureContent, quizWordFor } from '../data/content'
 import { saveQuizResult, updateSettings } from '../db/actions'
 import type { QuizKind } from '../db/db'
 import { useStats, useTodayPlan, useTodayStory } from '../db/hooks'
@@ -301,15 +301,23 @@ export function Quiz({ kind, level, onExit }: { kind: QuizKind; level?: Level; o
 
   useEffect(() => {
     if (!words || story === undefined || questions) return
-    setQuestions(
-      buildQuiz(words.map((w) => quizWordFor(w, storySentences)), {
-        speech: speechSupported(),
-        types: kind === 'weekly' ? LIGHT_TYPES : undefined,
-        distractorPool: DISTRACTOR_MEANINGS,
-      }),
-    )
-    setCorrectness([])
-    setSaved(false)
+    let cancelled = false
+    // بدون محتوى لا يوجد إلا أسئلة الإملاء، فنجهّزه أولًا (ونكمل حتى لو فشل).
+    void ensureContent(words).then(() => {
+      if (cancelled) return
+      setQuestions(
+        buildQuiz(words.map((w) => quizWordFor(w, storySentences)), {
+          speech: speechSupported(),
+          types: kind === 'weekly' ? LIGHT_TYPES : undefined,
+          distractorPool: distractorMeanings(),
+        }),
+      )
+      setCorrectness([])
+      setSaved(false)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [words, attempt, kind, story, questions])
 
   function exit() {
@@ -318,7 +326,15 @@ export function Quiz({ kind, level, onExit }: { kind: QuizKind; level?: Level; o
   }
 
   const title = level ? `${TITLES[kind]} ${level}` : TITLES[kind]
-  if (!questions) return null
+  if (!questions) {
+    return (
+      <Screen title={title} onBack={exit}>
+        <Card className="py-10 text-center text-slate-600 dark:text-slate-400" aria-live="polite">
+          نجهّز أسئلة الاختبار…
+        </Card>
+      </Screen>
+    )
+  }
 
   if (questions.length === 0) {
     return (

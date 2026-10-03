@@ -4,6 +4,9 @@
  */
 import { missingTargets, type StoryKind, type StorySentence } from '../src/lib/storyText.js'
 import { isLevel, type Level } from '../src/lib/types.js'
+import { AiError, cleanText as clean, generateJson, parsePos, parseWord, respond, str, type Env, type Fetch } from './gemini.js'
+
+export type { Env }
 
 export interface StoryWord {
   word: string
@@ -43,39 +46,25 @@ export interface StoryResponse {
   model: string
 }
 
-export class StoryError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message)
-  }
-}
-
 // ——— التحقق من المدخلات: القيم تُحقن في التعليمات، فنضيّقها بشدة ———
 
-// كلمات أكسفورد: حتى 3 أجزاء (per cent, a lot) و25 حرفًا.
-const WORD_RE = /^[A-Za-z][A-Za-z'’.-]*(?: [A-Za-z][A-Za-z'’.-]*){0,2}$/
-const clean = (s: unknown, max: number) => (typeof s === 'string' ? s.replace(/[\u0000-\u001f<>{}]/g, '').trim().slice(0, max) : '')
-
 function parseWords(value: unknown, max: number, field: string): StoryWord[] {
-  if (!Array.isArray(value)) throw new StoryError(400, 'bad_request', `${field} must be an array`)
-  return value.slice(0, max).map((w) => {
-    const word = typeof w?.word === 'string' ? w.word.trim() : ''
-    if (word.length > 25 || !WORD_RE.test(word)) throw new StoryError(400, 'bad_request', `invalid word in ${field}`)
-    return { word, pos: clean(w?.pos, 40) || undefined, meaningAr: clean(w?.meaningAr, 80) || undefined }
-  })
+  if (!Array.isArray(value)) throw new AiError(400, 'bad_request', `${field} must be an array`)
+  return value.slice(0, max).map((w) => ({
+    word: parseWord(w?.word, field),
+    pos: parsePos(w?.pos),
+    meaningAr: clean(w?.meaningAr, 80) || undefined,
+  }))
 }
 
 export function parseRequest(body: unknown): StoryRequest {
   const b = (body ?? {}) as Record<string, unknown>
   const level = String(b.level ?? '')
-  if (!isLevel(level)) throw new StoryError(400, 'bad_request', 'invalid level')
+  if (!isLevel(level)) throw new AiError(400, 'bad_request', 'invalid level')
   const kind = b.kind === 'beginner' || b.kind === 'advanced' ? b.kind : null
-  if (!kind) throw new StoryError(400, 'bad_request', 'invalid kind')
+  if (!kind) throw new AiError(400, 'bad_request', 'invalid kind')
   const words = parseWords(b.words, 30, 'words')
-  if (words.length === 0) throw new StoryError(400, 'bad_request', 'no words')
+  if (words.length === 0) throw new AiError(400, 'bad_request', 'no words')
   return {
     kind,
     level,
@@ -174,7 +163,6 @@ export const RESPONSE_SCHEMA = {
 
 export function validateStory(raw: unknown): GeneratedStory {
   const r = (raw ?? {}) as Record<string, unknown>
-  const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
   const sentences = (Array.isArray(r.sentences) ? r.sentences : [])
     .map((s) => ({ text: str(s?.text, 400), translation: str(s?.translation, 400) }))
     .filter((s) => s.text)
@@ -186,7 +174,7 @@ export function validateStory(raw: unknown): GeneratedStory {
     })
     .filter((q) => q.question && q.options.length >= 2 && Number.isInteger(q.answer) && q.answer >= 0 && q.answer < q.options.length)
     .slice(0, 3)
-  if (sentences.length < 4) throw new StoryError(502, 'bad_output', 'story too short')
+  if (sentences.length < 4) throw new AiError(502, 'bad_output', 'story too short')
   return {
     title: str(r.title, 120) || 'Today’s story',
     titleAr: str(r.title_ar, 120) || 'قصة اليوم',
@@ -196,114 +184,37 @@ export function validateStory(raw: unknown): GeneratedStory {
   }
 }
 
-// ——— الاستدعاء ———
+// ——— التوليد ———
 
-export const DEFAULT_MODELS = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-flash-lite-latest']
-const API = 'https://generativelanguage.googleapis.com/v1beta/models'
-const RETRYABLE = new Set([404, 408, 429, 500, 502, 503, 504])
-
-type Fetch = typeof fetch
-
-async function callGemini(model: string, prompt: string, apiKey: string, fetchImpl: Fetch, timeoutMs: number) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    const res = await fetchImpl(`${API}/${model}:generateContent`, {
-      method: 'POST',
-      signal: controller.signal,
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: RESPONSE_SCHEMA, temperature: 0.9 },
-      }),
-    })
-    const data = (await res.json().catch(() => ({}))) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[]
-      error?: { message?: string }
-    }
-    if (!res.ok) return { ok: false as const, status: res.status, message: data.error?.message ?? res.statusText }
-    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? ''
-    try {
-      return { ok: true as const, json: JSON.parse(text) as unknown }
-    } catch {
-      return { ok: false as const, status: 502, message: 'invalid JSON from model' }
-    }
-  } catch (e) {
-    return { ok: false as const, status: 504, message: e instanceof Error ? e.message : String(e) }
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-export interface Env {
-  GEMINI_API_KEY?: string
-  GEMINI_MODELS?: string
-}
-
-/**
- * يجرّب النماذج بالترتيب عند الازدحام (503/429) ويعيد المحاولة مرة إذا نسي النموذج كلمات اليوم.
- */
+/** يعيد المحاولة مرة إذا نسي النموذج كلمات اليوم، ويحتفظ بالمسودة الأفضل. */
 export async function generateStory(
   request: StoryRequest,
   env: Env,
-  fetchImpl: Fetch = fetch,
-  timeoutMs = 25_000,
-  /** حد إجمالي لكل المحاولات حتى لا تتجاوز مهلة الدالة. */
+  fetchImpl?: Fetch,
   deadlineMs = 55_000,
 ): Promise<StoryResponse> {
-  const startedAt = Date.now()
-  const apiKey = env.GEMINI_API_KEY
-  if (!apiKey) throw new StoryError(503, 'not_configured', 'GEMINI_API_KEY is not set')
-  const models = (env.GEMINI_MODELS?.split(',').map((m) => m.trim()).filter(Boolean)) ?? DEFAULT_MODELS
+  const deadlineAt = Date.now() + deadlineMs
   const targets = request.words.map((w) => w.word)
-  let prompt = buildPrompt(request)
   let best: StoryResponse | null = null
-  let lastError = 'no model available'
+  let prompt = buildPrompt(request)
 
   for (let attempt = 0; attempt < 2; attempt++) {
-    let produced = false
-    for (const model of models) {
-      const remaining = deadlineMs - (Date.now() - startedAt)
-      if (remaining < 5_000) break
-      const result = await callGemini(model, prompt, apiKey, fetchImpl, Math.min(timeoutMs, remaining))
-      if (!result.ok) {
-        lastError = `${model}: ${result.status} ${result.message}`
-        if (result.status === 400 || result.status === 401 || result.status === 403) {
-          throw new StoryError(502, 'provider_rejected', lastError)
-        }
-        if (RETRYABLE.has(result.status)) continue
-        throw new StoryError(502, 'provider_error', lastError)
-      }
-      let story: GeneratedStory
-      try {
-        story = validateStory(result.json)
-      } catch (e) {
-        lastError = `${model}: ${e instanceof Error ? e.message : e}`
-        continue
-      }
-      const missing = missingTargets(story.sentences, targets)
-      if (!best || missing.length < best.missing.length) best = { story, missing, model }
-      produced = true
-      break
+    let draft: { value: GeneratedStory; model: string }
+    try {
+      draft = await generateJson({ prompt, schema: RESPONSE_SCHEMA, env, validate: validateStory, fetchImpl, temperature: 0.9, deadlineAt })
+    } catch (e) {
+      if (best && e instanceof AiError && e.code === 'unavailable') return best
+      throw e
     }
-    if (!produced) break
-    if (best && best.missing.length === 0) return best
-    prompt = `${buildPrompt(request)}\n\nIMPORTANT: your previous draft forgot these words: ${best!.missing.join(', ')}. Every one of today's words must appear.`
+    const missing = missingTargets(draft.value.sentences, targets)
+    if (!best || missing.length < best.missing.length) best = { story: draft.value, missing, model: draft.model }
+    if (best.missing.length === 0) return best
+    prompt = `${buildPrompt(request)}\n\nIMPORTANT: your previous draft forgot these words: ${best.missing.join(', ')}. Every one of today's words must appear.`
   }
-  if (best) return best
-  throw new StoryError(503, 'unavailable', lastError)
+  return best!
 }
 
 /** نقطة دخول مشتركة: تُرجع حالة HTTP وجسم JSON. */
-export async function handleStory(body: unknown, env: Env, fetchImpl?: Fetch): Promise<{ status: number; json: unknown }> {
-  try {
-    return { status: 200, json: await generateStory(parseRequest(body), env, fetchImpl) }
-  } catch (e) {
-    if (e instanceof StoryError) {
-      if (e.status >= 500) console.error('[story]', e.code, e.message)
-      return { status: e.status, json: { error: e.code } }
-    }
-    console.error('[story] unexpected', e)
-    return { status: 500, json: { error: 'internal' } }
-  }
+export function handleStory(body: unknown, env: Env, fetchImpl?: Fetch): Promise<{ status: number; json: unknown }> {
+  return respond('story', () => generateStory(parseRequest(body), env, fetchImpl))
 }

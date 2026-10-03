@@ -4,12 +4,18 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-/** خادم التطوير يخدم /api/story بنفس منطق دالة Vercel، والمفتاح من .env (لا يصل للواجهة). */
-function storyApi(env: Record<string, string>): Plugin {
+/** خادم التطوير يخدم /api/* بنفس منطق دوال Vercel، والمفتاح من .env (لا يصل للواجهة). */
+const ROUTES: Record<string, [string, string]> = {
+  '/api/story': ['/server/story.ts', 'handleStory'],
+  '/api/content': ['/server/content.ts', 'handleContent'],
+  '/api/topics': ['/server/content.ts', 'handleTopics'],
+}
+
+function devApi(env: Record<string, string>): Plugin {
   return {
-    name: 'siyaq-story-api',
+    name: 'siyaq-dev-api',
     configureServer(server) {
-      server.middlewares.use('/api/story', async (req, res) => {
+      for (const [route, [file, handler]] of Object.entries(ROUTES)) server.middlewares.use(route, async (req, res) => {
         if (req.method !== 'POST') {
           res.statusCode = 405
           return res.end()
@@ -22,8 +28,8 @@ function storyApi(env: Record<string, string>): Plugin {
         } catch {
           /* handled as bad_request */
         }
-        const { handleStory } = await server.ssrLoadModule('/server/story.ts')
-        const { status, json } = await handleStory(body, env)
+        const mod = await server.ssrLoadModule(file)
+        const { status, json } = await mod[handler](body, env)
         res.statusCode = status
         res.setHeader('content-type', 'application/json')
         res.end(JSON.stringify(json))
@@ -38,7 +44,7 @@ export default defineConfig(({ mode }) => ({
   base: mode === 'artifact' ? './' : '/',
   build: mode === 'artifact' ? { outDir: 'dist-artifact' } : undefined,
   plugins: [
-    storyApi(loadEnv(mode, process.cwd(), '')),
+    devApi(loadEnv(mode, process.cwd(), '')),
     react(),
     tailwindcss(),
     VitePWA({

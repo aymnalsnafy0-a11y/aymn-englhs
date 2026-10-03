@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { WordContent } from '../data/sampleContent'
+import type { ContentStatus, WordContent } from '../data/content'
 import { posLabel } from '../lib/format'
 import { splitHighlight } from '../lib/highlight'
 import type { Word } from '../lib/types'
@@ -14,22 +14,39 @@ const MEMORY_LABEL: Record<WordContent['memory']['kind'], string> = {
   family: 'عائلة الكلمة',
 }
 
-function Missing() {
+function Missing({ status, onRetry }: { status: ContentStatus; onRetry?: () => void }) {
+  if (status === 'loading' || status === 'missing') {
+    return (
+      <p className="flex items-center gap-3 rounded-xl bg-slate-100 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-400" aria-live="polite">
+        <span className="size-4 shrink-0 animate-spin rounded-full border-2 border-teal-200 border-t-teal-700 motion-reduce:animate-none" />
+        نجهّز شرح الكلمة…
+      </p>
+    )
+  }
   return (
-    <p className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-      محتوى هذه الكلمة لم يُجهَّز بعد — سيُولَّد تلقائيًا في مرحلة لاحقة.
-    </p>
+    <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+      <p>ما قدرنا نجهّز شرح هذه الكلمة الآن (تحتاج اتصالًا بالخادم).</p>
+      {onRetry && (
+        <Button variant="secondary" className="mt-2" onClick={onRetry}>
+          حاول مرة أخرى
+        </Button>
+      )}
+    </div>
   )
 }
 
 export function WordCard({
   word,
   content,
+  status = 'ready',
+  onRetry,
   onFinish,
   onKnown,
 }: {
   word: Word
   content?: WordContent
+  status?: ContentStatus
+  onRetry?: () => void
   onFinish: () => void
   onKnown: () => void
 }) {
@@ -79,7 +96,13 @@ export function WordCard({
                 {content.syllables}
               </p>
             )}
-            <p className="mt-4 text-2xl font-medium">{content?.meaningAr ?? '—'}</p>
+            {content ? (
+              <p className="mt-4 text-2xl font-medium">{content.meaningAr}</p>
+            ) : (
+              <div className="mt-4 text-start">
+                <Missing status={status} onRetry={onRetry} />
+              </div>
+            )}
             <div className="mt-5 flex justify-center">
               <SpeakButtons text={word.word} />
             </div>
@@ -114,7 +137,7 @@ export function WordCard({
               </div>
             </div>
           ) : (
-            <Missing />
+            <Missing status={status} onRetry={onRetry} />
           ))}
 
         {stage === 2 &&
@@ -140,7 +163,7 @@ export function WordCard({
               )}
             </div>
           ) : (
-            <Missing />
+            <Missing status={status} onRetry={onRetry} />
           ))}
 
         {stage === 3 && <TracingDrill target={word.word} onDone={() => setTraced(true)} />}

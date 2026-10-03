@@ -1,6 +1,7 @@
+import { useEffect } from 'react'
 import { Button, Card, Screen } from '../components/ui'
 import { WordCard } from '../components/WordCard'
-import { contentFor } from '../data/sampleContent'
+import { contentFor, contentStatus, ensureContent } from '../data/content'
 import { completeWord, markKnown } from '../db/actions'
 import { useTodayPlan, useWords } from '../db/hooks'
 import { formatWords } from '../lib/format'
@@ -9,6 +10,14 @@ import { stopSpeaking } from '../lib/speech'
 export function Learn({ onExit }: { onExit: () => void }) {
   const plan = useTodayPlan()
   const words = useWords()
+  const planWords = (plan?.wordIds ?? []).map((id) => words?.find((w) => w.id === id)).filter((w) => !!w)
+  const planKey = planWords.map((w) => w.id).join()
+
+  // نجهّز محتوى كلمات اليوم كلها مسبقًا (دفعة واحدة لكل 10 كلمات).
+  useEffect(() => {
+    if (planWords.length) void ensureContent(planWords)
+  }, [planKey])
+
   if (!plan || !words) return null
 
   const currentId = plan.wordIds.find((id) => !plan.doneIds.includes(id))
@@ -43,6 +52,8 @@ export function Learn({ onExit }: { onExit: () => void }) {
         key={word.id}
         word={word}
         content={contentFor(word.id)}
+        status={contentStatus(word.id)}
+        onRetry={() => void ensureContent([word], true)}
         onFinish={() => {
           stopSpeaking()
           void completeWord(word.id)

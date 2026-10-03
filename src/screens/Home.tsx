@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { Button, Card, LevelBadge, ProgressBar, Screen } from '../components/ui'
+import { ensureContent } from '../data/content'
 import { syncTodayPlan } from '../db/actions'
-import type { QuizKind } from '../db/db'
+import { classifyTopicsInBackground } from '../db/topicsJob'
+import { db, type QuizKind } from '../db/db'
 import { useLoadInfo, useQuizzes, useStats, useStreak, useTodayPlan, useTodayStory } from '../db/hooks'
 import { toDayKey } from '../lib/dates'
 import { formatWords } from '../lib/format'
@@ -59,7 +61,13 @@ export function Home({
   const story = useTodayStory()
 
   useEffect(() => {
-    void syncTodayPlan()
+    // نجهّز الخطة ثم محتوى كلماتها في الخلفية حتى تكون البطاقات جاهزة عند فتحها.
+    void syncTodayPlan().then(async (plan) => {
+      if (!plan) return
+      const words = (await db.words.bulkGet(plan.wordIds)).filter((w) => !!w)
+      void ensureContent(words)
+      void classifyTopicsInBackground()
+    })
   }, [])
 
   if (!stats || !quizzes) return null
