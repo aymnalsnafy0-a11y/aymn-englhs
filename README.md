@@ -12,6 +12,11 @@ npm test           # اختبارات Vitest (المراجعة المتباعد�
 npm run build      # فحص الأنواع + بناء PWA في dist/
 ```
 
+## الموقع على GitHub Pages
+
+النسخة الثابتة منشورة على https://aymnalsnafy0-a11y.github.io/aymn-englhs/ وتتحدّث تلقائيًا مع كل دفع
+(`.github/workflows/pages.yml`). تعمل بملف التجربة (60 كلمة)؛ القصص وتوليد المحتوى تحتاج خادمًا (Vercel).
+
 ## ملف الكلمات
 
 - يقرأ التطبيق `data/oxford5000.csv` إن وُجد، وإلا يستخدم ملف التجربة `data/sample.csv`

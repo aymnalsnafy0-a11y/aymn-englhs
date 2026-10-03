@@ -41,7 +41,8 @@ function devApi(env: Record<string, string>): Plugin {
 // وضع artifact: نسخة للمعاينة على claude.ai — مسارات نسبية وبدون service worker.
 export default defineConfig(({ mode }) => ({
   // متغيرات بلا بادئة VITE_ تبقى في الخادم فقط.
-  base: mode === 'artifact' ? './' : '/',
+  // BASE_PATH لـ GitHub Pages (الموقع تحت /aymn-englhs/)؛ artifact بمسارات نسبية.
+  base: mode === 'artifact' ? './' : (process.env.BASE_PATH ?? '/'),
   build: mode === 'artifact' ? { outDir: 'dist-artifact' } : undefined,
   plugins: [
     devApi(loadEnv(mode, process.cwd(), '')),
@@ -57,7 +58,8 @@ export default defineConfig(({ mode }) => ({
         description: 'تعلّم كلمات أكسفورد 5000 بالترتيب حسب المستوى',
         lang: 'ar',
         dir: 'rtl',
-        start_url: '/',
+        start_url: '.',
+        scope: '.',
         display: 'standalone',
         background_color: '#0f172a',
         theme_color: '#0f766e',
