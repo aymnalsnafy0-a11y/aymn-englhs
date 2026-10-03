@@ -96,7 +96,7 @@ export async function generateJson<T>(o: GenerateOptions<T>): Promise<{ value: T
       o.fetchImpl ?? fetch,
       Math.min(o.timeoutMs ?? 25_000, remaining),
     )
-    if (!result.ok) {
+    if (result.ok === false) {
       lastError = `${model}: ${result.status} ${result.message}`
       if (result.status === 400 || result.status === 401 || result.status === 403) {
         throw new AiError(502, 'provider_rejected', lastError)
