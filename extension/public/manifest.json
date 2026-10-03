@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "سياق — مساعد التصفح",
+  "short_name": "سياق",
+  "version": "0.1.0",
+  "description": "يظلل كلماتك في المواقع الإنجليزية، ويستبدل كلمات في المواقع العربية حسب مستواك، ويحفظ كلمات جديدة لخطتك في سياق.",
+  "default_locale": "ar",
+  "icons": { "128": "icon-128.png" },
+  "action": { "default_popup": "popup.html", "default_title": "سياق", "default_icon": { "128": "icon-128.png" } },
+  "background": { "service_worker": "background.js" },
+  "permissions": ["storage", "contextMenus"],
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "exclude_matches": ["http://localhost/*", "http://127.0.0.1/*", "https://*.vercel.app/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["http://localhost/*", "http://127.0.0.1/*", "https://*.vercel.app/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

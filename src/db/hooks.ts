@@ -77,6 +77,10 @@ export function useStats() {
   }, [words, progress, settings, mistakes, map])
 }
 
+export function useSaved() {
+  return useLiveQuery(() => db.saved.orderBy('savedAt').toArray())
+}
+
 export function useStories() {
   return useLiveQuery(() => db.stories.orderBy('id').reverse().toArray())
 }

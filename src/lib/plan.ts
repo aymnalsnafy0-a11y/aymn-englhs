@@ -27,17 +27,29 @@ export function isKnown(word: Word, startLevel: Level, status: ProgressStatus | 
   return status === undefined && levelIndex(word.level) < levelIndex(startLevel)
 }
 
-/** الكلمات الجديدة التالية بالترتيب، من مستوى البداية فما فوق، دون ما له تقدّم سابق. */
+/**
+ * الكلمات الجديدة التالية بالترتيب، من مستوى البداية فما فوق، دون ما له تقدّم سابق.
+ * priority: كلمات حفظها المتعلم من المتصفح — تأتي أولًا حتى لو كانت من مستوى أقل.
+ */
 export function pickNewWords(
   words: Word[],
   progress: Map<string, ProgressStatus>,
   startLevel: Level,
   count: number,
   exclude: Set<string> = new Set(),
+  priority: string[] = [],
 ): Word[] {
   const minLevel = levelIndex(startLevel)
   const result: Word[] = []
+  const byId = new Map(words.map((w) => [w.id, w]))
+  for (const id of priority) {
+    const w = byId.get(id)
+    if (result.length >= count) break
+    if (!w || progress.has(id) || exclude.has(id) || result.includes(w)) continue
+    result.push(w)
+  }
   for (const w of words) {
+    if (result.includes(w)) continue
     if (result.length >= count) break
     if (levelIndex(w.level) < minLevel) continue
     if (progress.has(w.id) || exclude.has(w.id)) continue
@@ -99,6 +111,7 @@ export function reconcilePlan(
   startLevel: Level,
   targetCount: number,
   today: string,
+  priority: string[] = [],
 ): DayPlan {
   const fresh = !existing || existing.date !== today
   const doneIds = fresh ? [] : existing.doneIds
@@ -114,7 +127,7 @@ export function reconcilePlan(
         return !!w && !progress.has(id) && levelIndex(w.level) >= minLevel
       })
   const kept = keep.slice(0, remaining)
-  const extra = pickNewWords(words, progress, startLevel, remaining - kept.length, new Set([...doneIds, ...kept]))
+  const extra = pickNewWords(words, progress, startLevel, remaining - kept.length, new Set([...doneIds, ...kept]), priority)
 
   return {
     date: today,

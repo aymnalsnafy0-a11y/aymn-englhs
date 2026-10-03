@@ -32,11 +32,12 @@ export async function syncTodayPlan(targetCount?: number) {
   const settings = await getSettings()
   if (!settings.startLevel) return undefined
   const today = toDayKey()
-  return db.transaction('rw', db.plans, db.words, db.progress, async () => {
+  return db.transaction('rw', [db.plans, db.words, db.progress, db.saved], async () => {
     const existing = await db.plans.get(today)
     const target = targetCount ?? existing?.targetCount ?? settings.dailyCount
     const words = await db.words.orderBy('order').toArray()
-    const plan = reconcilePlan(existing, words, await progressMap(), settings.startLevel!, target, today)
+    const saved = (await db.saved.orderBy('savedAt').toArray()).map((s) => s.wordId)
+    const plan = reconcilePlan(existing, words, await progressMap(), settings.startLevel!, target, today, saved)
     await db.plans.put(plan)
     return plan
   })

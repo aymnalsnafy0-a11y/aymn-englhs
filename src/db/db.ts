@@ -103,6 +103,13 @@ export interface TopicRow {
   topic: string
 }
 
+/** كلمة حفظها المتعلم من إضافة المتصفح، تنتظر دخول خطته. */
+export interface SavedRow {
+  wordId: string
+  word: string
+  savedAt: number
+}
+
 export interface MetaRow {
   key: string
   value: unknown
@@ -120,6 +127,7 @@ export const db = new Dexie('siyaq') as Dexie & {
   stories: EntityTable<StoryRow, 'id'>
   content: EntityTable<ContentRow, 'wordId'>
   topics: EntityTable<TopicRow, 'wordId'>
+  saved: EntityTable<SavedRow, 'wordId'>
 }
 
 db.version(1).stores({
@@ -143,6 +151,10 @@ db.version(3).stores({
 db.version(4).stores({
   content: 'wordId',
   topics: 'wordId',
+})
+
+db.version(5).stores({
+  saved: 'wordId, savedAt',
 })
 
 export const DEFAULT_SETTINGS: Settings = {

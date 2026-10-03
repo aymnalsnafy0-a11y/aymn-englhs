@@ -3,6 +3,7 @@ import { Screen } from './components/ui'
 import { useSettings } from './db/hooks'
 import { loadWords } from './db/loader'
 import { loadStoredContent, useContentVersion } from './data/content'
+import { useExtensionBridge } from './db/extensionBridge'
 import { DailyCount } from './screens/DailyCount'
 import { Home } from './screens/Home'
 import { Learn } from './screens/Learn'
@@ -48,6 +49,7 @@ export default function App() {
   useTheme(settings?.theme)
   // إعادة الرسم عند وصول محتوى كلمات مولَّد.
   useContentVersion()
+  useExtensionBridge()
 
   useEffect(() => {
     loadWords()

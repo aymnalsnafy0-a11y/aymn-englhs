@@ -98,6 +98,13 @@ describe('plan', () => {
     expect(pickNewWords(words, progress, 'B1', 3).map((w) => w.word)).toEqual(['B1-2', 'B1-3', 'B2-1'])
   })
 
+  it('puts saved words first, even from a lower level, skipping ones already learned', () => {
+    const progress = new Map<string, ProgressStatus>([['a1-2|noun', 'learning']])
+    expect(
+      pickNewWords(words, progress, 'B1', 3, new Set(), ['a1-1|noun', 'a1-2|noun', 'missing|noun']).map((w) => w.word),
+    ).toEqual(['A1-1', 'B1-1', 'B1-2'])
+  })
+
   it('counts lower levels as known unless the learner has progress on them', () => {
     const progress = new Map<string, ProgressStatus>([
       ['a1-1|noun', 'learning'],

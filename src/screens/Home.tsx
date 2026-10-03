@@ -4,7 +4,7 @@ import { ensureContent } from '../data/content'
 import { syncTodayPlan } from '../db/actions'
 import { classifyTopicsInBackground } from '../db/topicsJob'
 import { db, type QuizKind } from '../db/db'
-import { useLoadInfo, useQuizzes, useStats, useStreak, useTodayPlan, useTodayStory } from '../db/hooks'
+import { useLoadInfo, useQuizzes, useSaved, useStats, useStreak, useTodayPlan, useTodayStory } from '../db/hooks'
 import { toDayKey } from '../lib/dates'
 import { formatWords } from '../lib/format'
 import { weeklyDue } from '../lib/selection'
@@ -59,6 +59,7 @@ export function Home({
   const streak = useStreak()
   const quizzes = useQuizzes()
   const story = useTodayStory()
+  const saved = useSaved()
 
   useEffect(() => {
     // نجهّز الخطة ثم محتوى كلماتها في الخلفية حتى تكون البطاقات جاهزة عند فتحها.
@@ -126,6 +127,18 @@ export function Home({
         <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
           تعمل الآن على ملف التجربة ({info.count} كلمة). لاستخدام القائمة الكاملة ضع الملف في{' '}
           <code dir="ltr">data/oxford5000.csv</code>.
+        </p>
+      )}
+
+      {saved && saved.some((s) => !stats.progressMap.has(s.wordId)) && (
+        <p className="mb-4 rounded-xl bg-teal-50 p-3 text-sm text-teal-900 dark:bg-teal-950/40 dark:text-teal-200">
+          كلمات حفظتها من المتصفح تنتظر خطتك:{' '}
+          <span dir="ltr" className="font-en">
+            {saved
+              .filter((s) => !stats.progressMap.has(s.wordId))
+              .map((s) => s.word)
+              .join(' · ')}
+          </span>
         </p>
       )}
 

@@ -1,0 +1,20 @@
+/* ألوان ثابتة تُقرأ فوق خلفيات المواقع الفاتحة والداكنة */
+.siyaq-learning {
+  background: rgba(251, 191, 36, 0.35) !important;
+  border-radius: 3px !important;
+  box-shadow: inset 0 -2px 0 #d97706 !important;
+  cursor: help !important;
+}
+.siyaq-mastered {
+  text-decoration: underline 2px dotted #0d9488 !important;
+  text-underline-offset: 3px !important;
+  cursor: help !important;
+}
+.siyaq-replaced {
+  font-family: 'Source Serif 4', Georgia, serif !important;
+  background: rgba(20, 184, 166, 0.18) !important;
+  border-radius: 3px !important;
+  padding: 0 0.15em !important;
+  unicode-bidi: isolate !important;
+  cursor: help !important;
+}

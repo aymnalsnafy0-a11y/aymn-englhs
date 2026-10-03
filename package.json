@@ -9,9 +9,10 @@
     "build": "tsc -b && vite build",
     "build:artifact": "tsc -b && vite build --mode artifact",
     "preview": "vite preview",
-    "typecheck": "tsc -b",
+    "typecheck": "tsc -b && tsc -p extension/tsconfig.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:extension": "node scripts/build-extension.mjs"
   },
   "dependencies": {
     "dexie": "^4.4.6",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/chrome": "^0.3.4",
     "@types/node": "^26.6.4",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
