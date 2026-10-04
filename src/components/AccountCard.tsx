@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { openAccount, resetPassword, signIn, signOutCloud, syncNow, useCloudStatus } from '../data/cloud'
+import { openAccount, resetPassword, signIn, signInWithGoogle, signOutCloud, syncNow, useCloudStatus } from '../data/cloud'
 import { Button } from './ui'
 
 function timeAgo(ts: number): string {
@@ -60,6 +60,25 @@ export function AccountCard() {
       <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
         سجّل الدخول ليُحفظ تقدّمك وقائمتك في حسابك وتنتقل بين الجوال والكمبيوتر. أول مرة: اضغط «حساب جديد».
       </p>
+      <Button
+        variant="secondary"
+        className="mb-3 w-full"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true)
+          setMsg(await signInWithGoogle())
+          setBusy(false)
+        }}
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5">
+          <path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6a5.1 5.1 0 0 1-2.2 3.4v2.8h3.6c2.1-1.9 3.2-4.8 3.2-8.3Z" />
+          <path fill="#34A853" d="M12 23c3 0 5.5-1 7.4-2.7l-3.6-2.8c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2v2.9A11 11 0 0 0 12 23Z" />
+          <path fill="#FBBC05" d="M5.7 14c-.2-.7-.4-1.3-.4-2s.1-1.4.4-2V7.1H2a11 11 0 0 0 0 9.8l3.7-2.9Z" />
+          <path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2 7.1L5.7 10C6.6 7.4 9.1 5.4 12 5.4Z" />
+        </svg>
+        الدخول بحساب Google
+      </Button>
+      <p className="mb-2 text-center text-xs text-slate-500">أو بالإيميل</p>
       <div className="grid gap-2">
         <input
           type="email"

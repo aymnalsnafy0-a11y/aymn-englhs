@@ -83,6 +83,8 @@ function init(): Promise<Sdk> {
     auth.languageCode = 'ar'
     await au.setPersistence(auth, au.browserLocalPersistence)
     sdk = { auth, db: fs.getFirestore(app), au, fs }
+    // إكمال الدخول بعد العودة من إعادة التوجيه (Google).
+    au.getRedirectResult(auth).catch((e) => set({ error: authError(e) }))
     au.onAuthStateChanged(auth, (user) => {
       if (user) {
         flag.set(true)
@@ -137,6 +139,28 @@ export async function signIn(email: string, password: string, create: boolean): 
     const { auth, au } = await init()
     if (create) await au.createUserWithEmailAndPassword(auth, email.trim(), password)
     else await au.signInWithEmailAndPassword(auth, email.trim(), password)
+    return null
+  } catch (e) {
+    return authError(e)
+  }
+}
+
+/** الدخول بحساب Google: نافذة منبثقة، وإن منعها المتصفح (مثل التطبيق المثبّت) ننتقل بإعادة توجيه. */
+export async function signInWithGoogle(): Promise<string | null> {
+  try {
+    const { auth, au } = await init()
+    const provider = new au.GoogleAuthProvider()
+    try {
+      await au.signInWithPopup(auth, provider)
+    } catch (e) {
+      const code = (e as { code?: string })?.code ?? ''
+      if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+        await au.signInWithRedirect(auth, provider)
+        return null
+      }
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return null
+      throw e
+    }
     return null
   } catch (e) {
     return authError(e)
