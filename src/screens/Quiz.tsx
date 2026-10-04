@@ -51,7 +51,7 @@ function TypedAnswer({ q, response, result }: { q: Question; response: string; r
   )
 }
 
-function QuestionView({ q, onAnswered }: { q: Question; onAnswered: (correct: boolean) => void }) {
+export function QuestionView({ q, onAnswered }: { q: Question; onAnswered: (correct: boolean) => void }) {
   const [response, setResponse] = useState('')
   const [result, setResult] = useState<Grade | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)

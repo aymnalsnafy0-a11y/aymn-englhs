@@ -6,7 +6,7 @@
  */
 import { db } from '../db/db'
 
-export type AiRoute = 'story' | 'content' | 'topics'
+export type AiRoute = 'story' | 'content' | 'topics' | 'exercises'
 
 export interface AiResult {
   ok: boolean
@@ -45,6 +45,7 @@ const LOCAL: Record<AiRoute, () => Promise<(body: unknown, env: { GEMINI_API_KEY
   story: () => import('../../server/story').then((m) => m.handleStory),
   content: () => import('../../server/content').then((m) => m.handleContent),
   topics: () => import('../../server/content').then((m) => m.handleTopics),
+  exercises: () => import('../../server/exercises').then((m) => m.handleExercises),
 }
 
 export async function postAi(route: AiRoute, body: unknown): Promise<AiResult> {

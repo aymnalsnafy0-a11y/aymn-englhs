@@ -81,8 +81,14 @@ function init(): Promise<Sdk> {
     const app = getApps().length ? getApp() : initializeApp(FIREBASE_CONFIG)
     const auth = au.getAuth(app)
     auth.languageCode = 'ar'
+    const firestore = fs.getFirestore(app)
+    // اختبارات محلية فقط: محاكي Firebase بدل المشروع الحقيقي.
+    if (import.meta.env.VITE_FIREBASE_EMULATOR === '1') {
+      au.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+      fs.connectFirestoreEmulator(firestore, '127.0.0.1', 8085)
+    }
     await au.setPersistence(auth, au.browserLocalPersistence)
-    sdk = { auth, db: fs.getFirestore(app), au, fs }
+    sdk = { auth, db: firestore, au, fs }
     // إكمال الدخول بعد العودة من إعادة التوجيه (Google).
     au.getRedirectResult(auth).catch((e) => set({ error: authError(e) }))
     au.onAuthStateChanged(auth, (user) => {
@@ -184,6 +190,14 @@ export async function signOutCloud(): Promise<void> {
   flag.set(false)
 }
 
+/** للوحدات الأخرى (الفصول): الاتصال الجاهز والمستخدم الحالي، أو خطأ إن لم يسجّل الدخول. */
+export async function cloudSdk(): Promise<{ db: Sdk['db']; fs: Sdk['fs']; uid: string; email: string }> {
+  const s = await init()
+  const user = s.auth.currentUser
+  if (!user) throw Object.assign(new Error('signed_out'), { code: 'signed_out' })
+  return { db: s.db, fs: s.fs, uid: user.uid, email: user.email ?? '' }
+}
+
 // ——— المزامنة ———
 
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -210,6 +224,9 @@ export function syncNow(): Promise<void> {
         again = false
         await syncAll(sdk!)
       } while (again)
+      // يحدّث تقدّم الطالب الظاهر لمدرسيه (بلا أثر إن لم يكن في فصل).
+      const { publishMemberStats } = await import('./classroom')
+      await publishMemberStats().catch((e) => console.warn('[classes]', e))
       set({ lastSync: Date.now() })
     } catch (e) {
       const code = (e as { code?: string })?.code

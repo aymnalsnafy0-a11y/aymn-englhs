@@ -25,9 +25,16 @@ const RETRYABLE = new Set([404, 408, 429, 500, 502, 503, 504])
 
 type CallResult = { ok: true; json: unknown } | { ok: false; status: number; message: string }
 
+/** صورة مرفقة بالطلب (base64 بدون بادئة data:). */
+export interface InlineImage {
+  mime: string
+  data: string
+}
+
 async function callGemini(
   model: string,
   prompt: string,
+  images: InlineImage[],
   schema: object,
   temperature: number,
   apiKey: string,
@@ -42,7 +49,9 @@ async function callGemini(
       signal: controller.signal,
       headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        contents: [
+          { role: 'user', parts: [...images.map((im) => ({ inline_data: { mime_type: im.mime, data: im.data } })), { text: prompt }] },
+        ],
         generationConfig: { responseMimeType: 'application/json', responseSchema: schema, temperature },
       }),
     })
@@ -66,6 +75,8 @@ async function callGemini(
 
 export interface GenerateOptions<T> {
   prompt: string
+  /** صور تُرسل مع التعليمات (مثل صور الدرس). */
+  images?: InlineImage[]
   schema: object
   env: Env
   /** يحوّل المخرجات الخام إلى قيمة صالحة أو يرمي خطأً (فيُجرَّب النموذج التالي). */
@@ -90,6 +101,7 @@ export async function generateJson<T>(o: GenerateOptions<T>): Promise<{ value: T
     const result = await callGemini(
       model,
       o.prompt,
+      o.images ?? [],
       o.schema,
       o.temperature ?? 0.7,
       apiKey,

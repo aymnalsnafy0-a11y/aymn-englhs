@@ -1,0 +1,56 @@
+rules_version = '2';
+
+// قواعد Firestore لموقع سياق (مشروع engle-e9877).
+// - learners: بيانات كل متعلم الخاصة — صاحبها فقط.
+// - classes: فصول المدرس. الرمز هو معرّف الفصل (يُعطى للطلاب).
+//   الطالب يرى واجبات فصله ونتيجته فقط؛ المدرس يرى طلاب فصوله ونتائجهم.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /learners/{uid}/state/{doc} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /classes/{code} {
+      function isTeacher() {
+        return signedIn() && get(/databases/$(database)/documents/classes/$(code)).data.teacherUid == request.auth.uid;
+      }
+      function isMember() {
+        return signedIn() && exists(/databases/$(database)/documents/classes/$(code)/members/$(request.auth.uid));
+      }
+
+      // من يعرف الرمز يقرأ اسم الفصل لينضم. القائمة: المدرس يرى فصوله فقط.
+      allow get: if signedIn();
+      allow list: if signedIn() && resource.data.teacherUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.teacherUid == request.auth.uid
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 60;
+      allow update: if isTeacher() && request.resource.data.teacherUid == resource.data.teacherUid;
+      allow delete: if isTeacher();
+
+      match /members/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isTeacher());
+        allow create, update: if signedIn() && request.auth.uid == uid
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 40;
+        allow delete: if signedIn() && (request.auth.uid == uid || isTeacher());
+      }
+
+      match /assignments/{aid} {
+        allow read: if isTeacher() || isMember();
+        allow create, update, delete: if isTeacher();
+
+        match /results/{uid} {
+          allow read: if signedIn() && (request.auth.uid == uid || isTeacher());
+          allow create, update: if isMember() && request.auth.uid == uid;
+          allow delete: if isTeacher();
+        }
+      }
+    }
+  }
+}

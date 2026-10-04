@@ -15,16 +15,23 @@ import { Mistakes } from './screens/Mistakes'
 import { Progress } from './screens/Progress'
 import { Quiz } from './screens/Quiz'
 import { Placement } from './screens/Placement'
+import { Classes } from './screens/classes/Classes'
+import { ClassDashboard } from './screens/classes/ClassDashboard'
+import { DoAssignment } from './screens/classes/DoAssignment'
+import { NewAssignment } from './screens/classes/NewAssignment'
+import { StudentClass } from './screens/classes/StudentClass'
 import { StoryScreen } from './screens/Story'
 import { StoryLibrary } from './screens/StoryLibrary'
 import type { QuizKind, Theme } from './db/db'
 import type { Level } from './lib/types'
 
-type Page = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily' | 'progress' | 'mistakes' | 'library' | 'placement'
+type Page = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily' | 'progress' | 'mistakes' | 'library' | 'placement' | 'classes'
 type Route =
   | { page: Page }
   | { page: 'quiz'; kind: QuizKind; level?: Level; back: Page }
   | { page: 'story'; storyId?: number; back: Page }
+  | { page: 'class' | 'newAssignment' | 'studentClass'; code: string }
+  | { page: 'doAssignment'; code: string; id: string }
 
 function useTheme(theme: Theme | undefined) {
   useEffect(() => {
@@ -107,6 +114,29 @@ export default function App() {
           openLibrary={() => go('library')}
         />
       )
+    case 'classes':
+      return (
+        <Classes
+          onBack={home}
+          openSettings={() => go('settings')}
+          openClass={(code) => setRoute({ page: 'class', code })}
+          openStudentClass={(code) => setRoute({ page: 'studentClass', code })}
+        />
+      )
+    case 'class':
+      return <ClassDashboard key={route.code} code={route.code} onBack={() => go('classes')} newAssignment={() => setRoute({ page: 'newAssignment', code: route.code })} />
+    case 'newAssignment':
+      return (
+        <NewAssignment
+          code={route.code}
+          onBack={() => setRoute({ page: 'class', code: route.code })}
+          onDone={() => setRoute({ page: 'class', code: route.code })}
+        />
+      )
+    case 'studentClass':
+      return <StudentClass key={route.code} code={route.code} onBack={() => go('classes')} open={(id) => setRoute({ page: 'doAssignment', code: route.code, id })} />
+    case 'doAssignment':
+      return <DoAssignment key={route.id} code={route.code} id={route.id} onBack={() => setRoute({ page: 'studentClass', code: route.code })} />
     case 'library':
       return <StoryLibrary onBack={home} open={(storyId) => setRoute({ page: 'story', storyId, back: 'library' })} />
     case 'progress':
@@ -124,6 +154,13 @@ export default function App() {
     case 'daily':
       return <DailyCount onDone={() => go('settings')} onBack={() => go('settings')} />
     default:
-      return <Home go={go} startQuiz={quiz('home')} openStory={() => setRoute({ page: 'story', back: 'home' })} />
+      return (
+        <Home
+          go={go}
+          startQuiz={quiz('home')}
+          openStory={() => setRoute({ page: 'story', back: 'home' })}
+          openStudentClass={(code) => setRoute({ page: 'studentClass', code })}
+        />
+      )
   }
 }

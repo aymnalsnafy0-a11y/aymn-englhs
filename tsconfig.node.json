@@ -19,6 +19,8 @@
     "vite.config.ts",
     "src/**/*.test.ts",
     "server",
-    "api"
+    "api",
+    "rules-tests",
+    "vitest.rules.config.ts"
   ]
 }

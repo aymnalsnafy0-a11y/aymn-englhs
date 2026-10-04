@@ -15,3 +15,7 @@ data/oxford5000.csv
 
 # مخرجات بناء إضافة المتصفح
 extension/dist
+
+# سجلات محاكي Firebase
+firestore-debug.log
+*-debug.log

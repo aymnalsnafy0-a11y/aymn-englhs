@@ -1,4 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useCloudStatus } from '../data/cloud'
+import { pendingHomework } from '../data/classroom'
 import { Button, Card, LevelBadge, ProgressBar, Screen } from '../components/ui'
 import { SetupCard } from '../components/AiSettings'
 import { ensureContent } from '../data/content'
@@ -11,7 +13,7 @@ import { formatWords } from '../lib/format'
 import { weeklyDue } from '../lib/selection'
 import { suggestedNewCount } from '../lib/srs'
 
-type Go = (screen: 'learn' | 'review' | 'settings' | 'progress' | 'mistakes' | 'library') => void
+type Go = (screen: 'learn' | 'review' | 'settings' | 'progress' | 'mistakes' | 'library' | 'classes') => void
 
 function Step({
   index,
@@ -49,11 +51,18 @@ export function Home({
   go,
   startQuiz,
   openStory,
+  openStudentClass,
 }: {
   go: Go
   startQuiz: (kind: QuizKind) => void
   openStory: () => void
+  openStudentClass: (code: string) => void
 }) {
+  const cloud = useCloudStatus()
+  const [homework, setHomework] = useState<{ count: number; firstCode?: string }>({ count: 0 })
+  useEffect(() => {
+    if (cloud.state === 'signedIn') void pendingHomework().then(setHomework).catch(() => {})
+  }, [cloud.state])
   const stats = useStats()
   const plan = useTodayPlan()
   const streak = useStreak()
@@ -95,6 +104,9 @@ export function Home({
               🔥 {streak.current}
             </span>
           )}
+          <Button variant="ghost" onClick={() => go('classes')}>
+            الفصول
+          </Button>
           <Button variant="ghost" onClick={() => go('progress')}>
             تقدّمي
           </Button>
@@ -124,6 +136,20 @@ export function Home({
       </Card>
 
       <SetupCard onOpenSettings={() => go('settings')} />
+
+      {homework.count > 0 && (
+        <button
+          type="button"
+          onClick={() => (homework.firstCode ? openStudentClass(homework.firstCode) : go('classes'))}
+          className="mb-4 flex w-full items-center justify-between gap-3 rounded-2xl bg-amber-50 p-4 text-start ring-1 ring-amber-300 hover:bg-amber-100 dark:bg-amber-950/30 dark:ring-amber-800"
+        >
+          <span>
+            <span className="block font-bold">📚 عندك {homework.count === 1 ? 'واجب جديد' : `${homework.count} واجبات`} من المدرس</span>
+            <span className="block text-sm text-slate-600 dark:text-slate-400">اضغط لتحلّه</span>
+          </span>
+          <span aria-hidden="true">←</span>
+        </button>
+      )}
 
       {saved && saved.some((s) => !stats.progressMap.has(s.wordId)) && (
         <p className="mb-4 rounded-xl bg-teal-50 p-3 text-sm text-teal-900 dark:bg-teal-950/40 dark:text-teal-200">

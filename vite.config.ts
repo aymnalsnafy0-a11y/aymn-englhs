@@ -9,6 +9,7 @@ const ROUTES: Record<string, [string, string]> = {
   '/api/story': ['/server/story.ts', 'handleStory'],
   '/api/content': ['/server/content.ts', 'handleContent'],
   '/api/topics': ['/server/content.ts', 'handleTopics'],
+  '/api/exercises': ['/server/exercises.ts', 'handleExercises'],
 }
 
 function devApi(env: Record<string, string>): Plugin {
