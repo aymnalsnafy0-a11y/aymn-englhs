@@ -138,6 +138,9 @@ export function SettingsScreen({ go, onBack }: { go: (s: 'levels' | 'daily') => 
           </Card>
         )}
       </div>
+      <p className="mt-6 text-center text-xs text-slate-400">
+        الإصدار: <span dir="ltr">{__BUILD_TIME__}</span>
+      </p>
     </Screen>
   )
 }

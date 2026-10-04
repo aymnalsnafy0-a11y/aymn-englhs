@@ -41,6 +41,8 @@ function devApi(env: Record<string, string>): Plugin {
 
 // وضع artifact: نسخة للمعاينة على claude.ai — مسارات نسبية وبدون service worker.
 export default defineConfig(({ mode }) => ({
+  // رقم الإصدار يظهر أسفل الإعدادات (للتأكد أن الجهاز يعمل بآخر نسخة).
+  define: { __BUILD_TIME__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')) },
   // متغيرات بلا بادئة VITE_ تبقى في الخادم فقط.
   // BASE_PATH لـ GitHub Pages (الموقع تحت /aymn-englhs/)؛ artifact بمسارات نسبية.
   base: mode === 'artifact' ? './' : (process.env.BASE_PATH ?? '/'),
