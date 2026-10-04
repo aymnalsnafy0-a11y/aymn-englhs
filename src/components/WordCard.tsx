@@ -72,7 +72,7 @@ export function WordCard({
             </li>
           ))}
         </ol>
-        <Button variant="ghost" onClick={onKnown} className="shrink-0 text-sm">
+        <Button variant="secondary" onClick={onKnown} className="min-h-9 shrink-0 px-3 text-sm" title="تُحتسب معروفة وتأتي الكلمة التالية">
           أعرفها ✓
         </Button>
       </div>
@@ -171,9 +171,16 @@ export function WordCard({
       </section>
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 px-5 py-3 dark:border-slate-800">
-        <Button variant="secondary" onClick={() => setStage((s) => s - 1)} disabled={stage === 0}>
-          السابق
-        </Button>
+        {stage === 0 ? (
+          // أول مرحلة: «السابق» لا معنى له، فنعرض التخطي هنا حيث يراه المتعلم مباشرة.
+          <Button variant="secondary" onClick={onKnown}>
+            أعرفها، تخطَّها
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={() => setStage((s) => s - 1)}>
+            السابق
+          </Button>
+        )}
         {last ? (
           <Button onClick={onFinish} disabled={!recalled}>
             إنهاء الكلمة
