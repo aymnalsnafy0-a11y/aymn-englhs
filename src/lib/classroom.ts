@@ -154,3 +154,29 @@ export function nextResult(prev: Result | undefined, attempt: Omit<Result, 'atte
     best: Math.max(prev?.best ?? 0, attempt.score),
   }
 }
+
+export interface StudentHomework {
+  done: number
+  total: number
+  average: number | null
+  items: { id: string; title: string; state: AssignmentState; score?: number; total?: number }[]
+}
+
+// ملخص واجبات طالب واحد عبر كل واجبات الفصل (لتبويب «الطلاب»).
+export function studentHomework(
+  uid: string,
+  assignments: Assignment[],
+  results: Record<string, Result[]>,
+  today: DayKey,
+  dayOf: (ts: number) => DayKey,
+): StudentHomework {
+  const items = assignments.map((a) => {
+    const r = results[a.id]?.find((x) => x.uid === uid)
+    return { id: a.id, title: a.title, state: assignmentState(a, r, today, dayOf), ...(r ? { score: r.score, total: r.total } : {}) }
+  })
+  const finished = items.filter((i) => i.total !== undefined)
+  const average = finished.length
+    ? Math.round(finished.reduce((s, i) => s + (i.total ? (i.score! / i.total) * 100 : 0), 0) / finished.length)
+    : null
+  return { done: finished.length, total: items.length, average, items }
+}

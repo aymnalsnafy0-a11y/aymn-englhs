@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Card, ProgressBar, Screen } from '../../components/ui'
 import { deleteAssignment, deleteClass, getClass, listAssignments, listMembers, listResults, removeMember, type Assignment } from '../../data/classroom'
-import { assignmentReport, formatCode, type AssignmentState } from '../../lib/classroom'
+import { assignmentReport, formatCode, studentHomework, type AssignmentState, type Member, type Result } from '../../lib/classroom'
 import { toDayKey } from '../../lib/dates'
 import { exerciseLabel } from '../../lib/exercises'
 import { cloudErrorText, useAsync } from '../../lib/useAsync'
@@ -32,7 +32,9 @@ export function ClassDashboard({
 }) {
   const data = useAsync(async () => {
     const [info, members, assignments] = await Promise.all([getClass(code), listMembers(code), listAssignments(code)])
-    return { info, members, assignments }
+    const lists = await Promise.all(assignments.map((a) => listResults(code, a.id).catch(() => [] as Result[])))
+    const results: Record<string, Result[]> = Object.fromEntries(assignments.map((a, i) => [a.id, lists[i]]))
+    return { info, members, assignments, results }
   }, [code])
   const [tab, setTab] = useState<'assignments' | 'students'>('assignments')
   // «تحديث» يعيد تحميل نتائج كل واجب أيضًا (كل بطاقة تحمّل نتائجها بنفسها).
@@ -42,6 +44,7 @@ export function ClassDashboard({
     setVersion((v) => v + 1)
   }
   const [copied, setCopied] = useState(false)
+  const [openStudent, setOpenStudent] = useState<string | null>(null)
 
   if (data.loading && !data.data) return <Screen title="الفصل" onBack={onBack}>{null}</Screen>
   if (data.error || !data.data?.info) {
@@ -51,7 +54,7 @@ export function ClassDashboard({
       </Screen>
     )
   }
-  const { info, members, assignments } = data.data
+  const { info, members, assignments, results } = data.data
   const invite = `انضم لفصل «${info.name}» في موقع سياق لتعلّم الإنجليزية:\n${location.origin}${import.meta.env.BASE_URL}\nالإعدادات ← سجّل الدخول ← الفصول ← رمز الفصل: ${formatCode(code)}`
 
   return (
@@ -113,58 +116,71 @@ export function ClassDashboard({
           {assignments.length === 0 ? (
             <Card className="text-center text-slate-500">لا توجد واجبات بعد.</Card>
           ) : (
+            <>
+            <p className="mb-2 text-sm text-slate-500">اضغط على أي واجب لترى نتيجة كل طالب فيه.</p>
             <ul className="grid gap-3">
               {assignments.map((a) => (
                 <AssignmentItem key={`${a.id}-${version}`} code={code} a={a} members={members} onDeleted={refresh} />
               ))}
             </ul>
+            </>
           )}
         </>
       ) : (
-        <Card className="p-0">
+        <>
           {members.length === 0 ? (
-            <p className="p-5 text-center text-slate-500">لم ينضم أي طالب بعد. شارك رمز الفصل معهم.</p>
+            <Card className="text-center text-slate-500">لم ينضم أي طالب بعد. شارك رمز الفصل معهم.</Card>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-slate-500">
-                  <tr className="border-b border-slate-100 dark:border-slate-800">
-                    <th className="p-3 text-start font-medium">الطالب</th>
-                    <th className="p-3 text-start font-medium">آخر نشاط</th>
-                    <th className="p-3 text-start font-medium">يعرف</th>
-                    <th className="p-3 text-start font-medium">قيد التعلّم</th>
-                    <th className="p-3 text-start font-medium">أيام متتالية</th>
-                    <th className="p-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {members.map((m) => (
-                    <tr key={m.uid} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-                      <td className="p-3 font-semibold">{m.name}</td>
-                      <td className="p-3">{ago(m.lastSeen)}</td>
-                      <td className="p-3 tabular-nums">{m.known ?? 0}</td>
-                      <td className="p-3 tabular-nums">{m.learning ?? 0}</td>
-                      <td className="p-3 tabular-nums">{m.streak ?? 0} 🔥</td>
-                      <td className="p-3 text-end">
-                        <Button
-                          variant="ghost"
-                          className="min-h-9 text-xs"
-                          onClick={async () => {
-                            if (!window.confirm(`إزالة ${m.name} من الفصل؟`)) return
-                            await removeMember(code, m.uid)
-                            data.reload()
-                          }}
-                        >
-                          إزالة
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ul className="grid gap-3">
+              {members.map((m) => {
+                const hw = studentHomework(m.uid, assignments, results, toDayKey(), dayOf)
+                const isOpen = openStudent === m.uid
+                return (
+                  <li key={m.uid}>
+                    <Card>
+                      <button type="button" className="w-full text-start" onClick={() => setOpenStudent(isOpen ? null : m.uid)} aria-expanded={isOpen}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-bold">{m.name}</p>
+                          <span className="shrink-0 text-sm text-slate-500">{isOpen ? '▲' : '▼'}</span>
+                        </div>
+                        <p className="mt-1 text-sm">
+                          الواجبات: <span className="tabular-nums font-semibold">{hw.done}/{hw.total}</span> محلول
+                          {hw.average !== null && (
+                            <>
+                              {' '}
+                              · متوسط <span dir="ltr" className="font-semibold">{hw.average}%</span>
+                            </>
+                          )}
+                        </p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          آخر نشاط: {ago(m.lastSeen)} · يعرف {m.known ?? 0} · يتعلّم {m.learning ?? 0} · {m.streak ?? 0} 🔥
+                        </p>
+                      </button>
+                      {isOpen && (
+                        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+                          <StudentResults hw={hw} />
+                          <div className="mt-3 flex justify-end">
+                            <Button
+                              variant="ghost"
+                              className="min-h-9 text-xs text-rose-700 dark:text-rose-400"
+                              onClick={async () => {
+                                if (!window.confirm(`إزالة ${m.name} من الفصل؟`)) return
+                                await removeMember(code, m.uid)
+                                data.reload()
+                              }}
+                            >
+                              إزالة من الفصل
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  </li>
+                )
+              })}
+            </ul>
           )}
-        </Card>
+        </>
       )}
 
       <div className="mt-8 text-center">
@@ -192,7 +208,7 @@ function AssignmentItem({
 }: {
   code: string
   a: Assignment
-  members: import('../../data/classroom').Member[]
+  members: Member[]
   onDeleted: () => void
 }) {
   const results = useAsync(() => listResults(code, a.id), [code, a.id])
@@ -285,5 +301,26 @@ function AssignmentItem({
         )}
       </Card>
     </li>
+  )
+}
+
+function StudentResults({ hw }: { hw: ReturnType<typeof studentHomework> }) {
+  if (hw.items.length === 0) return <p className="text-sm text-slate-500">لا توجد واجبات بعد.</p>
+  return (
+    <ul className="grid gap-1 text-sm">
+      {hw.items.map((i) => (
+        <li key={i.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 odd:bg-slate-50 dark:odd:bg-slate-800/50">
+          <span className="min-w-0">{i.title}</span>
+          <span className={`shrink-0 ${STATE[i.state].cls}`}>
+            {STATE[i.state].label}
+            {i.total !== undefined && (
+              <span className="ms-2 tabular-nums text-slate-700 dark:text-slate-300">
+                {i.score}/{i.total}
+              </span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }

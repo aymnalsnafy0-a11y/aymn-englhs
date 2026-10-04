@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignmentReport, assignmentState, formatCode, generateCode, nextResult, normalizeCode, type Assignment } from './classroom'
+import { assignmentReport, assignmentState, formatCode, generateCode, nextResult, normalizeCode, studentHomework, type Assignment } from './classroom'
 import { seededRng } from './quiz'
 
 const dayOf = (ts: number) => new Date(ts).toISOString().slice(0, 10)
@@ -72,5 +72,27 @@ describe('nextResult', () => {
     const first = nextResult(undefined, { uid: 's', name: 'س', score: 3, total: 5, wrong: ['x'], completedAt: 1 })
     const second = nextResult(first, { uid: 's', name: 'س', score: 2, total: 5, wrong: ['x', 'y'], completedAt: 2 })
     expect(second).toMatchObject({ score: 2, best: 3, attempts: 2 })
+  })
+})
+
+describe('studentHomework', () => {
+  const a1: Assignment = { id: 'a1', title: 'العائلة', words: [], createdAt: 0, dueAt: '2026-10-10' }
+  const a2: Assignment = { id: 'a2', title: 'درس الزوم', words: [], createdAt: 1 }
+  const results = {
+    a1: [{ uid: 's1', name: 'سارة', score: 3, total: 4, wrong: [], completedAt: at('2026-10-09'), attempts: 1, best: 3 }],
+    a2: [],
+  }
+  it('summarizes one student across all assignments', () => {
+    const hw = studentHomework('s1', [a1, a2], results, '2026-10-12', dayOf)
+    expect(hw.done).toBe(1)
+    expect(hw.total).toBe(2)
+    expect(hw.average).toBe(75)
+    expect(hw.items.map((i) => [i.title, i.state, i.score])).toEqual([
+      ['العائلة', 'done', 3],
+      ['درس الزوم', 'todo', undefined],
+    ])
+  })
+  it('has no average before any submission', () => {
+    expect(studentHomework('s9', [a1], results, '2026-10-12', dayOf).average).toBeNull()
   })
 })
