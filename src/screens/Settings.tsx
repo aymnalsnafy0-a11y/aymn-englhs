@@ -1,3 +1,4 @@
+import { AccountCard } from '../components/AccountCard'
 import { GeminiKeyForm, WordListImport } from '../components/AiSettings'
 import { Button, Card, LevelBadge, Screen } from '../components/ui'
 import { updateSettings } from '../db/actions'
@@ -51,6 +52,11 @@ export function SettingsScreen({ go, onBack }: { go: (s: 'levels' | 'daily') => 
     <Screen title="الإعدادات" onBack={onBack}>
       <div className="grid gap-3">
         <Card>
+          <h2 className="mb-1 font-bold">الحساب والمزامنة</h2>
+          <AccountCard />
+        </Card>
+
+        <Card>
           <h2 className="mb-1 font-bold">قائمة الكلمات</h2>
           <WordListImport />
         </Card>
@@ -99,7 +105,7 @@ export function SettingsScreen({ go, onBack }: { go: (s: 'levels' | 'daily') => 
 
         <Card>
           <h2 className="mb-1 font-bold">نوع قصة اليوم</h2>
-          <p className="mb-3 text-sm text-slate-500">تُستخدم عند تفعيل القصص قريبًا.</p>
+          <p className="mb-3 text-sm text-slate-500">حلقات تكمل بعضها بنفس الشخصيات، أو قصة جديدة كل يوم.</p>
           <Choice<StoryMode>
             name="نوع القصة"
             value={settings.storyMode}

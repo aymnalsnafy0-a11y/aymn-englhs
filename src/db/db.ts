@@ -28,6 +28,8 @@ export interface Settings {
   onboarded: boolean
   theme: Theme
   storyMode: StoryMode
+  /** وقت آخر تعديل (للمزامنة بين الأجهزة). */
+  updatedAt?: number
 }
 
 export type QuizKind = 'daily' | 'weekly' | 'level' | 'mistakes'
@@ -41,6 +43,7 @@ export interface MistakeRow {
   source: QuizKind | 'review'
   /** يوم تصحيحها؛ غياب القيمة يعني أنها ما زالت في الدفتر. */
   resolvedAt?: DayKey
+  updatedAt?: number
 }
 
 export interface QuizRow {
@@ -51,6 +54,8 @@ export interface QuizRow {
   total: number
   correct: number
   wrongIds: string[]
+  /** وقت الاختبار (مفتاح ثابت عبر الأجهزة). */
+  at?: number
 }
 
 /** نشاط يومي لحساب سلسلة الأيام المتتالية. */

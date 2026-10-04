@@ -4,6 +4,7 @@ import type { QuizScore } from '../lib/quiz'
 import { relapse, review, startLearning, type Rating } from '../lib/srs'
 import type { Level } from '../lib/types'
 import { postAi } from '../data/ai'
+import { scheduleSync } from '../data/cloud'
 import { contentFor } from '../data/content'
 import { shuffle } from '../lib/quiz'
 import { storyKindFor } from '../lib/storyText'
@@ -15,7 +16,8 @@ export async function getSettings(): Promise<Settings> {
 
 export async function updateSettings(patch: Partial<Omit<Settings, 'id'>>): Promise<void> {
   const current = await getSettings()
-  await db.settings.put({ ...current, ...patch })
+  await db.settings.put({ ...current, ...patch, updatedAt: Date.now() })
+  scheduleSync()
   // تغيير المستوى أو العدد اليومي ينعكس على خطة اليوم دون فقدان ما أُنجز.
   if (patch.startLevel !== undefined || patch.dailyCount !== undefined) {
     const plan = await db.plans.get(toDayKey())
@@ -59,6 +61,7 @@ async function addMistake(wordId: string, source: MistakeRow['source'], today: D
     firstAt: active ? row.firstAt : today,
     lastAt: today,
     source,
+    updatedAt: Date.now(),
   })
 }
 
@@ -69,7 +72,7 @@ async function addMistake(wordId: string, source: MistakeRow['source'], today: D
 async function resolveMistake(wordId: string, today: DayKey, force = false): Promise<void> {
   const row = await db.mistakes.get(wordId)
   if (!row || row.resolvedAt) return
-  if (force || diffDays(row.lastAt, today) >= 1) await db.mistakes.put({ ...row, resolvedAt: today })
+  if (force || diffDays(row.lastAt, today) >= 1) await db.mistakes.put({ ...row, resolvedAt: today, updatedAt: Date.now() })
 }
 
 /** أنهى المتعلم بطاقة الكلمة: تدخل جدول المراجعة. */
@@ -92,17 +95,20 @@ export async function completeWord(wordId: string): Promise<void> {
       await db.plans.put({ ...plan, doneIds: [...plan.doneIds, wordId] })
     }
   })
+  scheduleSync()
 }
 
 /** «أعرفها»: تُحتسب معروفة وتخرج من الخطة، وتحل محلها الكلمة التالية. */
 export async function markKnown(wordId: string): Promise<void> {
   await db.progress.put({ wordId, status: 'known', updatedAt: Date.now() })
   await syncTodayPlan()
+  scheduleSync()
 }
 
 /** يسجّل نتيجة مراجعة ويعيد true إذا يجب إعادتها في نفس الجلسة. */
 export async function recordReview(wordId: string, rating: Rating): Promise<boolean> {
   const today = toDayKey()
+  scheduleSync()
   return db.transaction('rw', [db.progress, db.mistakes, db.activity], async () => {
     const row = await db.progress.get(wordId)
     if (!row?.srs) return false
@@ -127,7 +133,7 @@ export async function recordReview(wordId: string, rating: Rating): Promise<bool
 export async function saveQuizResult(kind: QuizKind, result: QuizScore, correctIds: string[], level?: Level) {
   const today = toDayKey()
   await db.transaction('rw', [db.quizzes, db.mistakes, db.progress, db.plans, db.activity], async () => {
-    await db.quizzes.add({ kind, date: today, total: result.total, correct: result.correct, wrongIds: result.wrongIds, level })
+    await db.quizzes.add({ kind, date: today, total: result.total, correct: result.correct, wrongIds: result.wrongIds, level, at: Date.now() })
     for (const wordId of result.wrongIds) {
       await addMistake(wordId, kind, today)
       const row = await db.progress.get(wordId)
@@ -146,6 +152,7 @@ export async function saveQuizResult(kind: QuizKind, result: QuizScore, correctI
     }
     await bumpActivity('quizzes')
   })
+  scheduleSync()
 }
 
 export async function chooseStartLevel(level: Level): Promise<void> {
@@ -224,6 +231,7 @@ export async function requestTodayStory(): Promise<StoryRow> {
     const raced = await db.stories.where('date').equals(today).first()
     if (raced) return raced
     const id = await db.stories.add(story)
+    scheduleSync()
     return { ...story, id }
   })
 }
@@ -233,4 +241,5 @@ export async function saveStoryAnswers(id: number, answers: number[]): Promise<v
     await db.stories.update(id, { answers })
     await bumpActivity('stories')
   })
+  scheduleSync()
 }

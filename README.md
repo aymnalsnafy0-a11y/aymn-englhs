@@ -24,6 +24,14 @@ npm run build      # فحص الأنواع + بناء PWA في dist/
 
 على Vercel يبقى المفتاح في الخادم (`GEMINI_API_KEY`) ولا يحتاج المستخدم إدخاله.
 
+### الحساب والمزامنة
+
+نفس مشروع Firebase وحساب موقع «دروس الصينية» (إيميل وكلمة مرور). بيانات الإنجليزي في
+`learners/{uid}/state/english`, `english-progress`, `english-stories`, `english-wordlist` — منفصلة عن مستند
+الصيني `main`. الدمج بين الأجهزة في `src/lib/sync.ts` (الأحدث لكل عنصر، والاتحاد للأيام والاختبارات)،
+والاتصال في `src/data/cloud.ts`. يجب أن تسمح قواعد Firestore بـ `learners/{uid}/state/{doc}` لصاحب الحساب.
+مفتاح Gemini لا يُزامَن (يبقى في كل جهاز).
+
 ## ملف الكلمات
 
 - يقرأ التطبيق `data/oxford5000.csv` إن وُجد، وإلا يستخدم ملف التجربة `data/sample.csv`

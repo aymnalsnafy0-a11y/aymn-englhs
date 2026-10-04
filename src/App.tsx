@@ -4,6 +4,7 @@ import { useSettings } from './db/hooks'
 import { loadWords } from './db/loader'
 import { loadStoredContent, useContentVersion } from './data/content'
 import { useExtensionBridge } from './db/extensionBridge'
+import { startCloud } from './data/cloud'
 import { DailyCount } from './screens/DailyCount'
 import { Home } from './screens/Home'
 import { Learn } from './screens/Learn'
@@ -54,7 +55,10 @@ export default function App() {
   useEffect(() => {
     loadWords()
       .then(loadStoredContent)
-      .then(() => setLoaded(true))
+      .then(() => {
+        setLoaded(true)
+        startCloud()
+      })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
 
