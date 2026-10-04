@@ -4,13 +4,14 @@
  */
 import { shuffle, type Rng } from './quiz.js'
 
+/** ask: المطلوب من الطالب بالعربية (يظهر عنوانًا فوق جملة الدرس). */
 export type Exercise =
-  | { type: 'mcq'; q: string; options: string[]; answer: number; explain?: string }
-  | { type: 'tf'; q: string; answer: boolean; explain?: string }
+  | { type: 'mcq'; ask?: string; q: string; options: string[]; answer: number; explain?: string }
+  | { type: 'tf'; ask?: string; q: string; answer: boolean; explain?: string }
   /** q فيه فراغ «____»؛ answers: كل الإجابات المقبولة. */
-  | { type: 'fill'; q: string; answers: string[]; hint?: string; explain?: string }
-  /** words بالترتيب الصحيح؛ q: معنى الجملة أو تعليمة. */
-  | { type: 'order'; q?: string; words: string[]; explain?: string }
+  | { type: 'fill'; ask?: string; q: string; answers: string[]; hint?: string; explain?: string }
+  /** words بالترتيب الصحيح؛ q: معنى الجملة بالعربية. */
+  | { type: 'order'; ask?: string; q?: string; words: string[]; explain?: string }
 
 export type ExerciseType = Exercise['type']
 export const EXERCISE_TYPES: ExerciseType[] = ['mcq', 'tf', 'fill', 'order']
@@ -62,6 +63,27 @@ export function correctAnswerText(ex: Exercise): string {
   }
 }
 
+const DEFAULT_ASK: Record<ExerciseType, string> = {
+  mcq: 'اختر الإجابة الصحيحة',
+  tf: 'هل هذه الجملة صحيحة أم خاطئة؟',
+  fill: 'املأ الفراغ بالكلمة المناسبة',
+  order: 'رتّب الكلمات لتكوّن جملة صحيحة',
+}
+
+const INSTRUCTION = /^(choose|select|pick|complete|fill|read|decide|write|put|is|are|true or false|circle|match|find)\b/i
+
+/**
+ * يفصل «المطلوب» عن جملة الدرس: من الحقل ask إن وُجد، أو من بداية النص قبل «:»
+ * (للتمارين القديمة مثل «Choose the correct form: We ___ …»)، وإلا عنوان افتراضي حسب النوع.
+ */
+export function splitPrompt(ex: Exercise): { ask: string; body: string } {
+  const body = ex.type === 'order' ? (ex.q ?? '') : ex.q
+  if (ex.ask?.trim()) return { ask: ex.ask.trim(), body }
+  const m = body.match(/^([^:]{3,70}):\s+(.+)$/s)
+  if (m && INSTRUCTION.test(m[1].trim())) return { ask: m[1].trim(), body: m[2].trim() }
+  return { ask: DEFAULT_ASK[ex.type], body }
+}
+
 /** يخلط كلمات «رتّب» بحيث لا تظهر بترتيبها الصحيح. */
 export function scramble(words: string[], rng: Rng = Math.random): string[] {
   if (words.length < 2) return [...words]
@@ -74,6 +96,6 @@ export function scramble(words: string[], rng: Rng = Math.random): string[] {
 
 /** نص قصير يمثّل السؤال في تقرير المدرس («الأسئلة الأكثر خطأ»). */
 export function exerciseLabel(ex: Exercise): string {
-  const text = ex.type === 'order' ? ex.words.join(' ') : ex.q
+  const text = ex.type === 'order' ? ex.words.join(' ') : splitPrompt(ex).body
   return text.length > 70 ? `${text.slice(0, 67)}…` : text
 }

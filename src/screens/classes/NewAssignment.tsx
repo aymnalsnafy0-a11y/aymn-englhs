@@ -35,6 +35,13 @@ function ExerciseEditor({ ex, index, onChange, onRemove }: { ex: Exercise; index
             حذف
           </Button>
         </div>
+        <input
+          className={`${field} mb-2 font-semibold`}
+          aria-label="المطلوب من الطالب"
+          placeholder="المطلوب من الطالب (مثل: اختر الصيغة الصحيحة للفعل)"
+          value={ex.ask ?? ''}
+          onChange={(e) => onChange({ ...ex, ask: e.target.value })}
+        />
         <div className="grid gap-2" dir="ltr">
           {ex.type !== 'order' && (
             <input className={`${field} font-en`} aria-label="نص السؤال" value={ex.q} onChange={(e) => onChange({ ...ex, q: e.target.value })} />

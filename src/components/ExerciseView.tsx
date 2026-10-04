@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { BLANK, correctAnswerText, gradeExercise, scramble, TYPE_LABEL, type Exercise, type ExerciseResponse } from '../lib/exercises'
+import { BLANK, correctAnswerText, gradeExercise, scramble, splitPrompt, TYPE_LABEL, type Exercise, type ExerciseResponse } from '../lib/exercises'
 import { Button, Card, En } from './ui'
 
 /** تمرين واحد من تمارين الدرس: إجابة، تصحيح فوري مع الشرح، ثم «التالي». */
@@ -26,6 +26,7 @@ export function ExerciseView({ ex, onAnswered }: { ex: Exercise; onAnswered: (co
   }
 
   const done = correct !== null
+  const { ask, body } = splitPrompt(ex)
   const choice = (label: string, value: number | boolean, isAnswer: boolean, key: string) => {
     const chosen = done && response === value
     return (
@@ -49,14 +50,18 @@ export function ExerciseView({ ex, onAnswered }: { ex: Exercise; onAnswered: (co
 
   return (
     <Card>
-      <p className="mb-4 inline-block rounded-lg bg-slate-100 px-2 py-0.5 text-sm font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+      <p className="mb-2 inline-block rounded-lg bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
         {TYPE_LABEL[ex.type]}
       </p>
+      {/* المطلوب أولًا (عنوان)، ثم جملة الدرس وحدها */}
+      <h2 dir="auto" className="mb-4 text-lg font-bold">
+        {ask}
+      </h2>
 
       {ex.type === 'mcq' && (
         <>
-          <p dir="ltr" lang="en" className="font-en mb-4 text-xl leading-relaxed">
-            {ex.q}
+          <p dir="ltr" lang="en" className="font-en mb-4 rounded-xl bg-slate-50 px-4 py-3 text-xl leading-relaxed dark:bg-slate-800/60">
+            {body}
           </p>
           <div dir="ltr" className="grid gap-2 sm:grid-cols-2">
             {ex.options.map((o, i) => choice(o, i, i === ex.answer, String(i)))}
@@ -66,8 +71,8 @@ export function ExerciseView({ ex, onAnswered }: { ex: Exercise; onAnswered: (co
 
       {ex.type === 'tf' && (
         <>
-          <p dir="ltr" lang="en" className="font-en mb-4 text-xl leading-relaxed">
-            {ex.q}
+          <p dir="ltr" lang="en" className="font-en mb-4 rounded-xl bg-slate-50 px-4 py-3 text-xl leading-relaxed dark:bg-slate-800/60">
+            {body}
           </p>
           <div className="grid grid-cols-2 gap-2">
             {choice('✓ صح', true, ex.answer === true, 't')}
@@ -83,12 +88,12 @@ export function ExerciseView({ ex, onAnswered }: { ex: Exercise; onAnswered: (co
             if (typed.trim()) answer(typed)
           }}
         >
-          <p dir="ltr" lang="en" className="font-en mb-3 text-xl leading-relaxed">
-            {ex.q.split(BLANK)[0]}
+          <p dir="ltr" lang="en" className="font-en mb-3 rounded-xl bg-slate-50 px-4 py-3 text-xl leading-relaxed dark:bg-slate-800/60">
+            {body.split(BLANK)[0]}
             <span className="mx-1 inline-block min-w-16 border-b-2 border-teal-600 text-center text-teal-700 dark:text-teal-400">
               {done ? correctAnswerText(ex) : ' '}
             </span>
-            {ex.q.split(BLANK)[1]}
+            {body.split(BLANK)[1]}
           </p>
           {ex.hint && <p className="mb-3 text-sm text-slate-500">💡 {ex.hint}</p>}
           <div className="flex gap-2">
@@ -119,7 +124,7 @@ export function ExerciseView({ ex, onAnswered }: { ex: Exercise; onAnswered: (co
 
       {ex.type === 'order' && (
         <div>
-          {ex.q && <p className="mb-3 text-lg">رتّب الكلمات لتكوّن: «{ex.q}»</p>}
+          {body && <p className="mb-3 text-slate-600 dark:text-slate-400">المعنى: «{body}»</p>}
           <div
             dir="ltr"
             className={`font-en mb-3 flex min-h-14 flex-wrap items-center gap-2 rounded-xl p-2 ring-1 ${

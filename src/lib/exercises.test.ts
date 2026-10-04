@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { correctAnswerText, gradeExercise, normalizeAnswer, scramble, type Exercise } from './exercises'
+import { correctAnswerText, gradeExercise, normalizeAnswer, scramble, splitPrompt, type Exercise } from './exercises'
 import { seededRng } from './quiz'
+
+describe('splitPrompt', () => {
+  it('uses the Arabic ask when present', () => {
+    expect(splitPrompt({ type: 'mcq', ask: 'اختر الفعل المناسب', q: 'We ____ breakfast.', options: ['a', 'b'], answer: 0 })).toEqual({
+      ask: 'اختر الفعل المناسب',
+      body: 'We ____ breakfast.',
+    })
+  })
+  it('splits an English instruction before a colon (older exercises)', () => {
+    expect(splitPrompt({ type: 'mcq', q: 'Choose the correct form: We _____ a traditional breakfast.', options: ['a', 'b'], answer: 0 })).toEqual({
+      ask: 'Choose the correct form',
+      body: 'We _____ a traditional breakfast.',
+    })
+  })
+  it('keeps colons that are part of the sentence and falls back to a default ask', () => {
+    const s = splitPrompt({ type: 'tf', q: 'Time: we use "at" with hours.', answer: true })
+    expect(s.body).toBe('Time: we use "at" with hours.')
+    expect(s.ask).toBe('هل هذه الجملة صحيحة أم خاطئة؟')
+  })
+})
 
 describe('grading', () => {
   it('multiple choice and true/false', () => {

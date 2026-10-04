@@ -59,6 +59,7 @@ export function buildExercisePrompt(r: ExerciseRequest): string {
     `Write exactly ${r.count} exercises that practise what was taught in THIS lesson (its vocabulary, grammar and sentences) — not general knowledge.`,
     `Mix these types fairly evenly: ${r.types.map((t) => kinds[t]).join('; ')}.`,
     'Rules:',
+    '- Each exercise has "ask": a short Arabic instruction telling the student what to do (e.g. "اختر الصيغة الصحيحة للفعل", "هل الجملة صحيحة؟", "املأ الفراغ بالفعل المناسب"). Do NOT repeat the instruction inside "q": "q" holds only the English sentence or question itself.',
     '- Exercise content (questions, options, sentences) in English, at the students\' level; instructions/hints in Arabic where noted.',
     '- Each exercise has "explain": one short Arabic sentence explaining the correct answer (the rule or meaning).',
     '- Exactly one correct answer per question; no trick questions; vary the position of the correct option.',
@@ -80,6 +81,7 @@ export const EXERCISE_SCHEMA = {
         type: 'OBJECT',
         properties: {
           type: { type: 'STRING', enum: TYPES },
+          ask: { type: 'STRING' },
           q: { type: 'STRING' },
           options: { type: 'ARRAY', items: { type: 'STRING' } },
           answer: { type: 'STRING', description: 'mcq: index as a number string; tf: "true" or "false"' },
@@ -88,7 +90,7 @@ export const EXERCISE_SCHEMA = {
           hint: { type: 'STRING' },
           explain: { type: 'STRING' },
         },
-        required: ['type', 'explain'],
+        required: ['type', 'ask', 'explain'],
       },
     },
   },
@@ -101,6 +103,7 @@ const BLANK_RE = /_{2,}|\.{3,}|…/
 export function validateExercise(raw: unknown): Exercise | null {
   const r = (raw ?? {}) as Record<string, unknown>
   const explain = str(r.explain, 300) || undefined
+  const ask = str(r.ask, 120) || undefined
   const list = (v: unknown, max: number, len: number) =>
     (Array.isArray(v) ? v : []).map((x) => str(x, len)).filter(Boolean).slice(0, max)
   switch (r.type) {
@@ -110,23 +113,23 @@ export function validateExercise(raw: unknown): Exercise | null {
       const answer = Number(r.answer)
       if (!q || options.length < 2 || new Set(options).size !== options.length) return null
       if (!Number.isInteger(answer) || answer < 0 || answer >= options.length) return null
-      return { type: 'mcq', q, options, answer, explain }
+      return { type: 'mcq', ask, q, options, answer, explain }
     }
     case 'tf': {
       const q = str(r.q, 300)
       const answer = r.answer === true || r.answer === 'true' ? true : r.answer === false || r.answer === 'false' ? false : null
-      return q && answer !== null ? { type: 'tf', q, answer, explain } : null
+      return q && answer !== null ? { type: 'tf', ask, q, answer, explain } : null
     }
     case 'fill': {
       const q = str(r.q, 300).replace(BLANK_RE, '____')
       const answers = list(r.answers, 3, 40)
       if (!q.includes('____') || q.split('____').length !== 2 || answers.length === 0) return null
-      return { type: 'fill', q, answers, hint: str(r.hint, 120) || undefined, explain }
+      return { type: 'fill', ask, q, answers, hint: str(r.hint, 120) || undefined, explain }
     }
     case 'order': {
       const words = list(r.words, 12, 25)
       if (words.length < 3 || words.length > 12) return null
-      return { type: 'order', q: str(r.q, 200) || undefined, words, explain }
+      return { type: 'order', ask, q: str(r.q, 200) || undefined, words, explain }
     }
     default:
       return null
