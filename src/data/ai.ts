@@ -53,7 +53,8 @@ export async function postAi(route: AiRoute, body: unknown): Promise<AiResult> {
   if (key) {
     const handler = await LOCAL[route]()
     const { status, json } = await handler(body, { GEMINI_API_KEY: key })
-    return { ok: status === 200, status, json }
+    // نفس شكل استجابة الخادم (JSON): تختفي الحقول الفارغة undefined.
+    return { ok: status === 200, status, json: JSON.parse(JSON.stringify(json)) }
   }
   try {
     const res = await fetch(`${import.meta.env.BASE_URL}api/${route}`, {

@@ -81,7 +81,8 @@ function init(): Promise<Sdk> {
     const app = getApps().length ? getApp() : initializeApp(FIREBASE_CONFIG)
     const auth = au.getAuth(app)
     auth.languageCode = 'ar'
-    const firestore = fs.getFirestore(app)
+    // حقول اختيارية فارغة (undefined) تُتجاهل بدل أن يُرفض المستند كله.
+    const firestore = fs.initializeFirestore(app, { ignoreUndefinedProperties: true })
     // اختبارات محلية فقط: محاكي Firebase بدل المشروع الحقيقي.
     if (import.meta.env.VITE_FIREBASE_EMULATOR === '1') {
       au.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })

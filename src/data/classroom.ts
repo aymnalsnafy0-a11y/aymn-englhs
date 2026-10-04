@@ -66,11 +66,10 @@ export async function removeMember(code: string, uid: string): Promise<void> {
 
 export async function createAssignment(code: string, a: Omit<Assignment, 'id' | 'createdAt'>): Promise<string> {
   const { db, fs } = await cloudSdk()
-  const ref = await fs.addDoc(fs.collection(db, 'classes', code, 'assignments'), {
-    ...a,
-    ...(a.dueAt ? {} : { dueAt: null }),
-    createdAt: Date.now(),
-  })
+  const ref = await fs.addDoc(
+    fs.collection(db, 'classes', code, 'assignments'),
+    JSON.parse(JSON.stringify({ ...a, dueAt: a.dueAt ?? null, createdAt: Date.now() })),
+  )
   return ref.id
 }
 

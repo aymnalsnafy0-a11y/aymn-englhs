@@ -6,6 +6,7 @@ import { createAssignment, type AssignmentWord } from '../../data/classroom'
 import { db } from '../../db/db'
 import { useSettings } from '../../db/hooks'
 import { MAX_ASSIGNMENT_WORDS } from '../../lib/classroom'
+import { cloudErrorText } from '../../lib/useAsync'
 import { EXERCISE_TYPES, TYPE_LABEL, type Exercise, type ExerciseType } from '../../lib/exercises'
 import { prepareImage, type PreparedImage } from '../../lib/image'
 import { LEVELS, levelIndex, type Level } from '../../lib/types'
@@ -188,9 +189,10 @@ export function NewAssignment({ code, onBack, onDone }: { code: string; onBack: 
         exercises,
       })
       onDone()
-    } catch {
+    } catch (e) {
+      console.error('[publish]', e)
       setBusy(null)
-      setMsg('تعذّر النشر. تأكد من الاتصال وحاول مرة أخرى.')
+      setMsg(`تعذّر النشر: ${cloudErrorText(e)}`)
     }
   }
 
