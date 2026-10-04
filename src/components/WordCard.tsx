@@ -124,6 +124,7 @@ export function WordCard({
                 )}
               </p>
               <p className="mt-3 text-lg text-slate-600 dark:text-slate-400">{example.ar}</p>
+              <p className="mt-2 text-xs text-slate-500">💡 كلك يمين (أو اضغط مطوّلًا على الجوال) على أي كلمة لمعناها ونطقها.</p>
               <div className="mt-5 flex flex-wrap gap-2">
                 <SpeakButtons text={example.en} />
                 {content!.examples.length > 1 && (
