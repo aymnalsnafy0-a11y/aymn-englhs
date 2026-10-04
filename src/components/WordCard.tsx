@@ -25,7 +25,7 @@ function Missing({ status, onRetry }: { status: ContentStatus; onRetry?: () => v
   }
   return (
     <div className="rounded-xl bg-slate-100 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-      <p>ما قدرنا نجهّز شرح هذه الكلمة الآن (تحتاج اتصالًا بالخادم).</p>
+      <p>ما قدرنا نجهّز شرح هذه الكلمة. تأكد من الإنترنت ومن مفتاح Gemini في الإعدادات.</p>
       {onRetry && (
         <Button variant="secondary" className="mt-2" onClick={onRetry}>
           حاول مرة أخرى

@@ -6,6 +6,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import { db } from '../db/db'
+import { postAi } from './ai'
 import type { QuizWord } from '../lib/quiz'
 import type { Word } from '../lib/types'
 import { SAMPLE_CONTENT, contentFor as sampleContentFor, type WordContent } from './sampleContent'
@@ -23,6 +24,12 @@ const listeners = new Set<() => void>()
 function notify() {
   version++
   for (const l of listeners) l()
+}
+
+/** ينسى الإخفاقات السابقة (مثلًا بعد حفظ مفتاح Gemini) لتُعاد المحاولة. */
+export function clearContentFailures(): void {
+  failed.clear()
+  notify()
 }
 
 /** يحمّل المحتوى المخزّن مرة عند بدء التطبيق. */
@@ -55,12 +62,8 @@ export function useContentVersion(): number {
 }
 
 async function fetchBatch(words: Word[]): Promise<void> {
-  const res = await fetch('/api/content', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ words: words.map((w) => ({ word: w.word, pos: w.pos, level: w.level })) }),
-  })
-  const data = await res.json().catch(() => null)
+  const res = await postAi('content', { words: words.map((w) => ({ word: w.word, pos: w.pos, level: w.level })) })
+  const data = res.json
   if (!res.ok || !Array.isArray(data?.items)) throw new Error(data?.error ?? `HTTP ${res.status}`)
   const rows: { wordId: string; content: WordContent; model: string; createdAt: number }[] = []
   const topics: { wordId: string; topic: string }[] = []

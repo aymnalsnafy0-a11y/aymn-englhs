@@ -92,3 +92,10 @@ export function useStory(id: number | undefined) {
 export function useTodayStory() {
   return useLiveQuery(async () => (await db.stories.where('date').equals(toDayKey()).first()) ?? null)
 }
+
+export function useGeminiKey() {
+  return useLiveQuery(async () => {
+    const row = await db.meta.get('geminiKey')
+    return typeof row?.value === 'string' && row.value ? row.value : null
+  })
+}

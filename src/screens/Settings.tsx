@@ -1,3 +1,4 @@
+import { GeminiKeyForm, WordListImport } from '../components/AiSettings'
 import { Button, Card, LevelBadge, Screen } from '../components/ui'
 import { updateSettings } from '../db/actions'
 import type { StoryMode, Theme } from '../db/db'
@@ -49,6 +50,16 @@ export function SettingsScreen({ go, onBack }: { go: (s: 'levels' | 'daily') => 
   return (
     <Screen title="الإعدادات" onBack={onBack}>
       <div className="grid gap-3">
+        <Card>
+          <h2 className="mb-1 font-bold">قائمة الكلمات</h2>
+          <WordListImport />
+        </Card>
+
+        <Card>
+          <h2 className="mb-1 font-bold">مفتاح Gemini (القصص وشرح الكلمات)</h2>
+          <GeminiKeyForm />
+        </Card>
+
         <Card className="flex items-center justify-between gap-3">
           <div>
             <h2 className="font-bold">مستوى البداية</h2>
@@ -104,7 +115,7 @@ export function SettingsScreen({ go, onBack }: { go: (s: 'levels' | 'daily') => 
           <Card className="text-sm text-slate-600 dark:text-slate-400">
             <h2 className="mb-1 font-bold text-slate-900 dark:text-slate-100">مصدر الكلمات</h2>
             <p>
-              {info.source === 'oxford5000' ? 'قائمة أكسفورد الكاملة' : 'ملف التجربة'} — {info.count} كلمة
+              {info.source === 'sample' ? 'ملف التجربة' : info.source === 'custom' ? 'قائمتك المستوردة' : 'قائمة أكسفورد الكاملة'} — {info.count} كلمة
             </p>
             {info.errors.length > 0 && (
               <details className="mt-2">

@@ -1,6 +1,7 @@
 import { levelIndex } from '../lib/types'
 import { db } from './db'
 import { loadWords, type LoadInfo } from './loader'
+import { postAi } from '../data/ai'
 
 const BATCH = 200
 let running = false
@@ -17,7 +18,7 @@ export async function classifyTopicsInBackground(maxRequests = 3): Promise<void>
     const info = (await db.meta.get('loadInfo'))?.value as LoadInfo | undefined
     const settings = await db.settings.get('main')
     // ملف التجربة مصنّف يدويًا؛ التصنيف للقائمة الكاملة فقط.
-    if (info?.source !== 'oxford5000' || !settings?.startLevel) return
+    if (!info || info.source === 'sample' || !settings?.startLevel) return
     const start = levelIndex(settings.startLevel)
     const have = new Set(await db.topics.toCollection().primaryKeys())
     const progress = new Set(await db.progress.toCollection().primaryKeys())
@@ -29,12 +30,8 @@ export async function classifyTopicsInBackground(maxRequests = 3): Promise<void>
     let changed = false
     for (let i = 0; i < todo.length && i / BATCH < maxRequests; i += BATCH) {
       const batch = todo.slice(i, i + BATCH)
-      const res = await fetch('/api/topics', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ words: batch.map((w) => ({ word: w.word, pos: w.pos })) }),
-      })
-      const data = await res.json().catch(() => null)
+      const res = await postAi('topics', { words: batch.map((w) => ({ word: w.word, pos: w.pos })) })
+      const data = res.json
       if (!res.ok || !Array.isArray(data?.topics)) break
       // ما لم يُصنَّف يُحفظ بمجموعته الحالية حتى لا يُطلب مرة أخرى.
       await db.topics.bulkPut(batch.map((w, j) => ({ wordId: w.id, topic: (data.topics[j] as string | null) ?? w.topic })))

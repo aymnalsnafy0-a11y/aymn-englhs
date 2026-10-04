@@ -15,7 +15,8 @@ export function Learn({ onExit }: { onExit: () => void }) {
 
   // نجهّز محتوى كلمات اليوم كلها مسبقًا (دفعة واحدة لكل 10 كلمات).
   useEffect(() => {
-    if (planWords.length) void ensureContent(planWords)
+    // retry: كلمات فشلت سابقًا (بلا اتصال أو قبل حفظ المفتاح) تُطلب من جديد عند فتح البطاقات.
+    if (planWords.length) void ensureContent(planWords, true)
   }, [planKey])
 
   if (!plan || !words) return null

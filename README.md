@@ -15,7 +15,14 @@ npm run build      # فحص الأنواع + بناء PWA في dist/
 ## الموقع على GitHub Pages
 
 النسخة الثابتة منشورة على https://aymnalsnafy0-a11y.github.io/aymn-englhs/ وتتحدّث تلقائيًا مع كل دفع
-(`.github/workflows/pages.yml`). تعمل بملف التجربة (60 كلمة)؛ القصص وتوليد المحتوى تحتاج خادمًا (Vercel).
+(`.github/workflows/pages.yml`). لتجهيزها للمذاكرة (مرة واحدة في كل جهاز):
+
+1. **الإعدادات ← قائمة الكلمات ← حمّل ملف الكلمات**: اختر `oxford5000.csv` (ينتجه `scripts/oxford_pdf_to_csv.py`).
+   الملف يُحفظ في المتصفح فقط ولا يُنشر.
+2. **الإعدادات ← مفتاح Gemini**: الصق مفتاحًا مجانيًا من https://aistudio.google.com/apikey. يُحفظ في هذا الجهاز فقط،
+   والتطبيق يتصل بـ Gemini مباشرة من المتصفح بنفس منطق الخادم (`src/data/ai.ts`).
+
+على Vercel يبقى المفتاح في الخادم (`GEMINI_API_KEY`) ولا يحتاج المستخدم إدخاله.
 
 ## ملف الكلمات
 

@@ -10,10 +10,10 @@ import { matchTarget, segmentSentence } from '../lib/storyText'
 import type { Word } from '../lib/types'
 
 const ERRORS: Record<string, string> = {
-  not_configured: 'خدمة القصص غير مفعّلة على الخادم بعد (مفتاح Gemini غير مضبوط).',
+  not_configured: 'لتفعيل القصص أضف مفتاح Gemini المجاني من الإعدادات.',
   unavailable: 'خدمة توليد القصص مزدحمة الآن. جرّب بعد دقيقة.',
-  provider_rejected: 'رفضت خدمة Gemini الطلب. تأكد من صلاحية المفتاح.',
-  network: 'تعذّر الوصول إلى خادم القصص. تأكد من الاتصال وأن التطبيق يعمل مع الخادم.',
+  provider_rejected: 'رفض Gemini الطلب. تأكد من المفتاح في الإعدادات.',
+  network: 'تعذّر الاتصال. تأكد من الإنترنت، أو أضف مفتاح Gemini من الإعدادات.',
   no_words: 'أنهِ بطاقة كلمة واحدة على الأقل اليوم حتى نكتب قصتك.',
 }
 

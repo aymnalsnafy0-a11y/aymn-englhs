@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { WordListImport } from '../components/AiSettings'
 import { Button, Card, En, LevelBadge, Screen } from '../components/ui'
 import { chooseStartLevel } from '../db/actions'
 import { useLoadInfo, useSettings, useWords } from '../db/hooks'
@@ -53,6 +54,20 @@ export function LevelPicker({
         <p className="mb-4 text-slate-600 dark:text-slate-400">
           تغيير المستوى لا يمسح تقدّمك. الكلمات التي تعلّمتها تبقى في المراجعة.
         </p>
+      )}
+
+      {info?.source === 'custom' && (
+        <p className="mb-4 rounded-xl bg-teal-50 p-3 text-sm text-teal-900 dark:bg-teal-950/40 dark:text-teal-200" aria-live="polite">
+          ✓ تم تحميل قائمتك: {info.count} كلمة، محفوظة في هذا الجهاز فقط.
+        </p>
+      )}
+      {isSample && (
+        <Card className="mb-4 ring-amber-300 dark:ring-amber-800">
+          <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
+            عندك ملف قائمة أكسفورد (oxford5000.csv)؟ حمّله أولًا لتبدأ بكل الكلمات. يبقى في جهازك فقط.
+          </p>
+          <WordListImport compact />
+        </Card>
       )}
 
       <ul className="grid gap-3">

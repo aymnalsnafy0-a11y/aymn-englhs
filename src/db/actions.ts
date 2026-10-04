@@ -3,6 +3,7 @@ import { reconcilePlan, type ProgressStatus } from '../lib/plan'
 import type { QuizScore } from '../lib/quiz'
 import { relapse, review, startLearning, type Rating } from '../lib/srs'
 import type { Level } from '../lib/types'
+import { postAi } from '../data/ai'
 import { contentFor } from '../data/content'
 import { shuffle } from '../lib/quiz'
 import { storyKindFor } from '../lib/storyText'
@@ -191,25 +192,16 @@ export async function requestTodayStory(): Promise<StoryRow> {
     meaningAr: contentFor(w.id)?.meaningAr,
   })
 
-  let response: Response
-  try {
-    response = await fetch('/api/story', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        kind,
-        level: settings.startLevel,
-        mode,
-        episode: mode === 'serial' ? serial.length + 1 : 1,
-        words: words.map(toPayload),
-        reviewWords: reviewWords.map(toPayload),
-        previous: mode === 'serial' ? serial.slice(-3).map((s) => s.summary) : [],
-      }),
-    })
-  } catch {
-    throw new StoryRequestError('network')
-  }
-  const data = await response.json().catch(() => null)
+  const response = await postAi('story', {
+    kind,
+    level: settings.startLevel,
+    mode,
+    episode: mode === 'serial' ? serial.length + 1 : 1,
+    words: words.map(toPayload),
+    reviewWords: reviewWords.map(toPayload),
+    previous: mode === 'serial' ? serial.slice(-3).map((s) => s.summary) : [],
+  })
+  const data = response.json
   if (!response.ok || !data?.story) throw new StoryRequestError(data?.error ?? 'network')
 
   const story: StoryRow = {

@@ -28,6 +28,7 @@ jobs:
       - run: npm run build
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_STATIC: '1'
       - name: Publish to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:

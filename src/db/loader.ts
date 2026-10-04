@@ -13,7 +13,7 @@ const FULL = '../../data/oxford5000.csv'
 const SAMPLE = '../../data/sample.csv'
 
 export interface LoadInfo {
-  source: 'oxford5000' | 'sample'
+  source: 'oxford5000' | 'sample' | 'custom'
   count: number
   errors: string[]
 }
@@ -28,8 +28,10 @@ export async function loadWords(): Promise<LoadInfo> {
   const key = files[FULL] ? FULL : SAMPLE
   const loader = files[key]
   if (!loader) throw new Error('لم يُعثر على ملف الكلمات في مجلد data/')
-  const text = await loader()
-  const source = key === FULL ? 'oxford5000' : 'sample'
+  // قائمة استوردها المستخدم من جهازه (تبقى في متصفحه فقط) لها الأولوية.
+  const custom = (await db.meta.get(CUSTOM))?.value as CustomList | undefined
+  const text = custom?.text ?? (await loader())
+  const source: LoadInfo['source'] = custom ? 'custom' : key === FULL ? 'oxford5000' : 'sample'
   const { words: raw, errors } = parseWordList(text)
   // تصنيفات المواضيع المحفوظة (من الذكاء الاصطناعي) تحدد ترتيب المجموعات داخل المستوى.
   const topics = new Map((await db.topics.toArray()).map((t) => [t.wordId, t.topic]))
@@ -49,4 +51,35 @@ export async function loadWords(): Promise<LoadInfo> {
   const info: LoadInfo = { source, count: words.length, errors }
   await db.meta.put({ key: 'loadInfo', value: info })
   return info
+}
+
+// ——— استيراد قائمة الكلمات من جهاز المستخدم ———
+
+const CUSTOM = 'customWordList'
+export const MIN_IMPORT_WORDS = 50
+
+interface CustomList {
+  text: string
+  name: string
+  importedAt: number
+}
+
+export interface ImportResult {
+  ok: boolean
+  count: number
+  errors: string[]
+}
+
+/** يستورد ملف CSV (word,level,pos) ويحفظه في المتصفح فقط، ثم يعيد بناء الكلمات. التقدّم لا يتأثر. */
+export async function importWordList(text: string, name: string): Promise<ImportResult> {
+  const { words, errors } = parseWordList(text)
+  if (words.length < MIN_IMPORT_WORDS) return { ok: false, count: words.length, errors }
+  await db.meta.put({ key: CUSTOM, value: { text, name, importedAt: Date.now() } satisfies CustomList })
+  await loadWords()
+  return { ok: true, count: words.length, errors }
+}
+
+export async function removeImportedWordList(): Promise<void> {
+  await db.meta.delete(CUSTOM)
+  await loadWords()
 }
