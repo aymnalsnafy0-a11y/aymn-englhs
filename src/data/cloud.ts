@@ -1,7 +1,7 @@
 /**
- * الحساب والمزامنة عبر Firebase (نفس حساب موقع الصيني).
+ * الحساب والمزامنة عبر Firebase (مشروع الإنجليزي الخاص).
  * - مكتبة Firebase تُحمَّل فقط عند استخدام الحساب.
- * - البيانات في learners/{uid}/state/english* — لا تمس مستند الصيني «main».
+ * - البيانات في learners/{uid}/state/english*.
  * - كل مستند يُدمج داخل معاملة (transaction): نقرأ نسخة الحساب، ندمجها مع الجهاز، نكتب النتيجة للطرفين.
  */
 import { useSyncExternalStore } from 'react'
@@ -122,6 +122,9 @@ const AUTH_ERRORS: Record<string, string> = {
   'auth/invalid-email': 'اكتب إيميلًا صحيحًا.',
   'auth/too-many-requests': 'محاولات كثيرة. انتظر قليلًا ثم حاول.',
   'auth/network-request-failed': 'لا يوجد اتصال بالإنترنت.',
+  'auth/configuration-not-found': 'تسجيل الدخول غير مفعّل بعد في Firebase (Authentication ← Get started ← Email/Password).',
+  'auth/operation-not-allowed': 'تسجيل الدخول بالإيميل غير مفعّل في Firebase (Authentication ← Sign-in method).',
+  'auth/unauthorized-domain': 'هذا الموقع غير مضاف في Firebase (Authentication ← Settings ← Authorized domains).',
 }
 
 function authError(e: unknown): string {
@@ -189,7 +192,7 @@ export function syncNow(): Promise<void> {
       set({
         error:
           code === 'permission-denied'
-            ? 'Firebase رفض الحفظ: يجب تحديث قواعد Firestore لتشمل بيانات الإنجليزي.'
+            ? 'Firebase رفض الحفظ: تأكد من قواعد Firestore (learners/{uid}/state/{doc}).'
             : 'تعذّرت المزامنة الآن. ستُعاد تلقائيًا.',
       })
       console.error('[sync]', e)

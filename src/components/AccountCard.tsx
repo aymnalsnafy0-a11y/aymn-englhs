@@ -10,7 +10,7 @@ function timeAgo(ts: number): string {
   return new Date(ts).toLocaleString('ar', { hour: 'numeric', minute: '2-digit', day: 'numeric', month: 'short' })
 }
 
-/** الحساب والمزامنة: نفس حساب موقع «دروس الصينية». */
+/** الحساب والمزامنة بين الأجهزة. */
 export function AccountCard() {
   const cloud = useCloudStatus()
   const [email, setEmail] = useState('')
@@ -58,7 +58,7 @@ export function AccountCard() {
       onFocus={() => void openAccount().catch(() => {})}
     >
       <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-        سجّل الدخول بنفس حسابك في موقع «دروس الصينية» ليُحفظ تقدّمك وقائمتك وتنتقل بين الجوال والكمبيوتر.
+        سجّل الدخول ليُحفظ تقدّمك وقائمتك في حسابك وتنتقل بين الجوال والكمبيوتر. أول مرة: اضغط «حساب جديد».
       </p>
       <div className="grid gap-2">
         <input

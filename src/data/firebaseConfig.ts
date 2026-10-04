@@ -1,17 +1,17 @@
 /**
- * نفس مشروع Firebase الذي يستخدمه موقع «دروس الصينية» (حساب واحد للموقعين).
+ * مشروع Firebase الخاص بالإنجليزي (engle-e9877) — منفصل عن موقع الصيني.
  * إعدادات الويب هذه عامة بطبيعتها؛ الحماية في قواعد Firestore (كل متعلم يقرأ ويكتب بياناته فقط).
  */
 export const FIREBASE_CONFIG = {
-  apiKey: 'AIzaSyAcA8JJ43RIg7o3lrv5mK_5DUVzxCPNG3Y',
-  authDomain: 'chinese-lessons-38ce0.firebaseapp.com',
-  projectId: 'chinese-lessons-38ce0',
-  storageBucket: 'chinese-lessons-38ce0.firebasestorage.app',
-  messagingSenderId: '105280877994',
-  appId: '1:105280877994:web:34aa1a15b26cb8b36e67d3',
+  apiKey: 'AIzaSyB7wLiZDjb1oXX8NjBD5p_19K96Kyfbs7I',
+  authDomain: 'engle-e9877.firebaseapp.com',
+  projectId: 'engle-e9877',
+  storageBucket: 'engle-e9877.firebasestorage.app',
+  messagingSenderId: '829672151254',
+  appId: '1:829672151254:web:42fa3c8cecceb54bf85177',
 }
 
-/** مستندات الإنجليزي داخل learners/{uid}/state/ — منفصلة عن مستند الصيني «main». */
+/** مستندات المتعلم داخل learners/{uid}/state/. */
 export const DOCS = {
   core: 'english',
   progress: 'english-progress',

@@ -26,9 +26,8 @@ npm run build      # فحص الأنواع + بناء PWA في dist/
 
 ### الحساب والمزامنة
 
-نفس مشروع Firebase وحساب موقع «دروس الصينية» (إيميل وكلمة مرور). بيانات الإنجليزي في
-`learners/{uid}/state/english`, `english-progress`, `english-stories`, `english-wordlist` — منفصلة عن مستند
-الصيني `main`. الدمج بين الأجهزة في `src/lib/sync.ts` (الأحدث لكل عنصر، والاتحاد للأيام والاختبارات)،
+مشروع Firebase خاص بالإنجليزي (`engle-e9877`، إيميل وكلمة مرور). البيانات في
+`learners/{uid}/state/english`, `english-progress`, `english-stories`, `english-wordlist`. الدمج بين الأجهزة في `src/lib/sync.ts` (الأحدث لكل عنصر، والاتحاد للأيام والاختبارات)،
 والاتصال في `src/data/cloud.ts`. يجب أن تسمح قواعد Firestore بـ `learners/{uid}/state/{doc}` لصاحب الحساب.
 مفتاح Gemini لا يُزامَن (يبقى في كل جهاز).
 
