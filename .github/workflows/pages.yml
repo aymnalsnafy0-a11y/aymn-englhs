@@ -35,3 +35,34 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
           force_orphan: true
+
+  # عنوان ثانٍ على Firebase Hosting (engle-e9877.web.app) لمن لا تصله github.io (مثل بعض الشبكات في اليمن).
+  # يعمل فقط بعد إضافة السر FIREBASE_SERVICE_ACCOUNT في إعدادات المستودع؛ وإلا يُتخطى بهدوء.
+  firebase:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
+      - uses: actions/setup-node@v4
+        if: env.HAS_KEY == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: env.HAS_KEY == 'true'
+      - run: npm run build
+        if: env.HAS_KEY == 'true'
+        env:
+          BASE_PATH: /
+          VITE_STATIC: '1'
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        if: env.HAS_KEY == 'true'
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: engle-e9877
+          channelId: live
+      - if: env.HAS_KEY != 'true'
+        run: echo "FIREBASE_SERVICE_ACCOUNT غير مضاف — تخطّي النشر على Firebase Hosting."

@@ -24,6 +24,12 @@ npm run build      # فحص الأنواع + بناء PWA في dist/
 
 على Vercel يبقى المفتاح في الخادم (`GEMINI_API_KEY`) ولا يحتاج المستخدم إدخاله.
 
+### عنوان ثانٍ على Firebase Hosting
+
+لمن لا تصله `github.io` (بعض الشبكات تحجبه): نفس الموقع على `https://engle-e9877.web.app/`.
+ينشره سير العمل نفسه بعد إضافة السر `FIREBASE_SERVICE_ACCOUNT` (مفتاح حساب خدمة من Firebase ← إعدادات المشروع ← Service accounts)
+في GitHub ← Settings ← Secrets and variables ← Actions. الإعدادات في `firebase.json` (hosting) و`.firebaserc`.
+
 ### الحساب والمزامنة
 
 مشروع Firebase خاص بالإنجليزي (`engle-e9877`، إيميل وكلمة مرور). البيانات في
