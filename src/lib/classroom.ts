@@ -54,6 +54,27 @@ export interface Assignment {
   summary?: string
   createdAt: number
   dueAt?: DayKey
+  /** طلاب محددون (uid)؛ فارغ أو غير موجود = كل الفصل. */
+  to?: string[]
+  /** أقصى عدد محاولات؛ 0 أو غير موجود = بلا حد. 1 = بدون إعادة. */
+  maxAttempts?: number
+}
+
+/** هل الواجب لهذا الطالب؟ */
+export function isAssignedTo(a: Pick<Assignment, 'to'>, uid: string): boolean {
+  return !a.to?.length || a.to.includes(uid)
+}
+
+/** المحاولات المتبقية للطالب، أو null = بلا حد. */
+export function attemptsLeft(a: Pick<Assignment, 'maxAttempts'>, prev: Pick<Result, 'attempts'> | null | undefined): number | null {
+  if (!a.maxAttempts) return null
+  return Math.max(0, a.maxAttempts - (prev?.attempts ?? 0))
+}
+
+export function attemptsLabel(max: number | undefined): string {
+  if (!max) return 'إعادة بلا حد'
+  if (max === 1) return 'محاولة واحدة (بدون إعادة)'
+  return `${max} محاولات`
 }
 
 export interface Member {
@@ -116,7 +137,8 @@ export function assignmentReport(
   dayOf: (ts: number) => DayKey,
 ): AssignmentReport {
   const byUid = new Map(results.map((r) => [r.uid, r]))
-  const rows: StudentRow[] = members.map((m) => {
+  // واجب لطلاب محددين: التقرير عنهم فقط.
+  const rows: StudentRow[] = members.filter((m) => isAssignedTo(a, m.uid)).map((m) => {
     const r = byUid.get(m.uid)
     return {
       uid: m.uid,
@@ -174,7 +196,7 @@ export function studentHomework(
   today: DayKey,
   dayOf: (ts: number) => DayKey,
 ): StudentHomework {
-  const items = assignments.map((a) => {
+  const items = assignments.filter((a) => isAssignedTo(a, uid)).map((a) => {
     const r = results[a.id]?.find((x) => x.uid === uid)
     return { id: a.id, title: a.title, state: assignmentState(a, r, today, dayOf), ...(r ? { score: r.score, total: r.total } : {}) }
   })

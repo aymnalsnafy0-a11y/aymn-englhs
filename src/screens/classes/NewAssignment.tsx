@@ -2,11 +2,11 @@ import { useRef, useState } from 'react'
 import { validateExercise } from '../../../server/exercises'
 import { Button, Card, Screen } from '../../components/ui'
 import { postAi } from '../../data/ai'
-import { createAssignment, type AssignmentWord } from '../../data/classroom'
+import { createAssignment, listMembers, type AssignmentWord } from '../../data/classroom'
 import { db } from '../../db/db'
 import { useSettings } from '../../db/hooks'
-import { MAX_ASSIGNMENT_WORDS } from '../../lib/classroom'
-import { cloudErrorText } from '../../lib/useAsync'
+import { attemptsLabel, MAX_ASSIGNMENT_WORDS } from '../../lib/classroom'
+import { cloudErrorText, useAsync } from '../../lib/useAsync'
 import { EXERCISE_TYPES, TYPE_LABEL, type Exercise, type ExerciseType } from '../../lib/exercises'
 import { prepareImage, type PreparedImage } from '../../lib/image'
 import { LEVELS, levelIndex, type Level } from '../../lib/types'
@@ -111,6 +111,10 @@ export function NewAssignment({ code, onBack, onDone }: { code: string; onBack: 
   const [words, setWords] = useState<AssignmentWord[]>([])
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
+  const [maxAttempts, setMaxAttempts] = useState(0)
+  const [everyone, setEveryone] = useState(true)
+  const [to, setTo] = useState<string[]>([])
+  const members = useAsync(() => listMembers(code), [code])
   const fileRef = useRef<HTMLInputElement>(null)
   const lvl: Level = level || settings?.startLevel || 'A2'
 
@@ -185,6 +189,7 @@ export function NewAssignment({ code, onBack, onDone }: { code: string; onBack: 
     )
     if (invalid !== -1) return setMsg(`صحّح التمرين رقم ${invalid + 1} أو احذفه.`)
     if (!exercises.length && !words.length) return setMsg('الواجب فارغ: ولّد تمارين أو جهّز كلمات.')
+    if (!everyone && !to.length) return setMsg('اختر طالبًا واحدًا على الأقل، أو «كل الفصل».')
     setBusy('ننشر الواجب…')
     try {
       await createAssignment(code, {
@@ -194,6 +199,8 @@ export function NewAssignment({ code, onBack, onDone }: { code: string; onBack: 
         dueAt: dueAt || undefined,
         words,
         exercises,
+        maxAttempts,
+        ...(everyone ? {} : { to }),
       })
       onDone()
     } catch (e) {
@@ -341,6 +348,48 @@ export function NewAssignment({ code, onBack, onDone }: { code: string; onBack: 
             موعد التسليم (اختياري)
             <input type="date" className={`${field} mt-1`} value={dueAt} min={new Date().toISOString().slice(0, 10)} onChange={(e) => setDueAt(e.target.value)} />
           </label>
+          <label className="text-sm">
+            إعادة الحل
+            <select className={`${field} mt-1`} aria-label="عدد المحاولات" value={maxAttempts} onChange={(e) => setMaxAttempts(Number(e.target.value))}>
+              {[0, 1, 2, 3, 5].map((n) => (
+                <option key={n} value={n}>
+                  {attemptsLabel(n)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <fieldset className="text-sm">
+            <legend className="mb-1">لمن الواجب؟</legend>
+            <div className="flex flex-wrap gap-3">
+              <label className="flex items-center gap-1">
+                <input type="radio" name="to" className="size-4 accent-teal-700" checked={everyone} onChange={() => setEveryone(true)} /> كل الفصل
+              </label>
+              <label className="flex items-center gap-1">
+                <input type="radio" name="to" className="size-4 accent-teal-700" checked={!everyone} onChange={() => setEveryone(false)} /> طلاب محددون
+              </label>
+            </div>
+            {!everyone && (
+              <div className="mt-2 grid gap-1 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+                {members.loading ? (
+                  <p className="text-slate-500">جارٍ التحميل…</p>
+                ) : !members.data?.length ? (
+                  <p className="text-slate-500">لا يوجد طلاب في الفصل بعد.</p>
+                ) : (
+                  members.data.map((m) => (
+                    <label key={m.uid} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="size-4 accent-teal-700"
+                        checked={to.includes(m.uid)}
+                        onChange={(e) => setTo((t) => (e.target.checked ? [...t, m.uid] : t.filter((x) => x !== m.uid)))}
+                      />
+                      {m.name}
+                    </label>
+                  ))
+                )}
+              </div>
+            )}
+          </fieldset>
         </div>
         <Button className="mt-4 w-full" disabled={!!busy || (!exercises.length && !words.length)} onClick={() => void publish()}>
           انشر الواجب للطلاب

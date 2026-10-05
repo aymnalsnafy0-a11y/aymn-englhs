@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Card, ProgressBar, Screen } from '../../components/ui'
 import { deleteAssignment, deleteClass, getClass, listAssignments, listMembers, listResults, removeMember, type Assignment } from '../../data/classroom'
-import { assignmentReport, formatCode, studentHomework, type AssignmentState, type Member, type Result } from '../../lib/classroom'
+import { assignmentReport, attemptsLabel, formatCode, studentHomework, type AssignmentState, type Member, type Result } from '../../lib/classroom'
 import { toDayKey } from '../../lib/dates'
 import { exerciseLabel } from '../../lib/exercises'
 import { cloudErrorText, useAsync } from '../../lib/useAsync'
@@ -94,6 +94,9 @@ export function ClassDashboard({
         </div>
         <p className="mt-2 text-sm text-slate-500">
           {members.length} طالب · {assignments.length} واجب
+          {info.teacherNames && Object.keys(info.teacherNames).length > 0 && (
+            <> · المعلمون: {[info.teacherName, ...Object.values(info.teacherNames)].join('، ')}</>
+          )}
         </p>
       </Card>
 
@@ -214,7 +217,12 @@ function AssignmentItem({
   const results = useAsync(() => listResults(code, a.id), [code, a.id])
   const [open, setOpen] = useState(false)
   const report = results.data ? assignmentReport(a, members, results.data, toDayKey(), dayOf) : null
-  const parts = [a.exercises?.length ? `${a.exercises.length} تمرين` : null, a.words.length ? `${a.words.length} كلمة` : null].filter(Boolean)
+  const parts = [
+    a.exercises?.length ? `${a.exercises.length} تمرين` : null,
+    a.words.length ? `${a.words.length} كلمة` : null,
+    a.to?.length ? `لـ${a.to.length} ${a.to.length === 1 ? 'طالب' : 'طلاب'}` : null,
+    a.maxAttempts ? attemptsLabel(a.maxAttempts) : null,
+  ].filter(Boolean)
 
   return (
     <li>
@@ -224,7 +232,7 @@ function AssignmentItem({
             <div className="min-w-0">
               <p className="font-bold">{a.title}</p>
               <p className="text-sm text-slate-500">
-                {parts.join(' + ')} {a.dueAt && <>· التسليم <span dir="ltr">{a.dueAt}</span></>}
+                {parts.join(' · ')} {a.dueAt && <>· التسليم <span dir="ltr">{a.dueAt}</span></>}
               </p>
             </div>
             <span className="shrink-0 text-sm text-slate-500">{open ? '▲' : '▼'}</span>

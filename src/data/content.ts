@@ -2,11 +2,13 @@
  * نقطة الوصول الوحيدة لمحتوى الكلمات في الواجهة:
  * 1) المحتوى المولَّد بالذكاء الاصطناعي (مخزّن في IndexedDB، لا يُعاد توليده)
  * 2) المحتوى الثابت لكلمات ملف التجربة.
+ * 3) مكتبة الشرح المشتركة في Firestore (تُسأل قبل التوليد، وما يُولَّد يُضاف إليها للجميع).
  * التوليد يتم عند الحاجة فقط (كلمات اليوم، المراجعات، الاختبارات) في دفعات من 10.
  */
 import { useSyncExternalStore } from 'react'
 import { db } from '../db/db'
 import { postAi } from './ai'
+import { fetchShared, uploadShared } from './library'
 import type { QuizWord } from '../lib/quiz'
 import type { Word } from '../lib/types'
 import { SAMPLE_CONTENT, contentFor as sampleContentFor, type WordContent } from './sampleContent'
@@ -61,7 +63,22 @@ export function useContentVersion(): number {
   )
 }
 
-async function fetchBatch(words: Word[]): Promise<void> {
+/** يأخذ من المكتبة المشتركة ما هو جاهز، ويعيد الكلمات التي ما زالت ناقصة. */
+async function fromLibrary(words: Word[]): Promise<Word[]> {
+  const found = await fetchShared(words.map((w) => w.id))
+  if (found.size === 0) return words
+  const rows = [...found].map(([wordId, s]) => ({ wordId, content: s.content, model: 'shared', createdAt: Date.now() }))
+  const topics = [...found].filter(([, s]) => s.topic).map(([wordId, s]) => ({ wordId, topic: s.topic! }))
+  await db.transaction('rw', db.content, db.topics, async () => {
+    await db.content.bulkPut(rows)
+    const existing = new Set((await db.topics.bulkGet(topics.map((t) => t.wordId))).filter(Boolean).map((t) => t!.wordId))
+    await db.topics.bulkPut(topics.filter((t) => !existing.has(t.wordId)))
+  })
+  for (const r of rows) generated.set(r.wordId, r.content)
+  return words.filter((w) => !found.has(w.id))
+}
+
+export async function fetchBatch(words: Word[]): Promise<void> {
   const res = await postAi('content', { words: words.map((w) => ({ word: w.word, pos: w.pos, level: w.level })) })
   const data = res.json
   if (!res.ok || !Array.isArray(data?.items)) throw new Error(data?.error ?? `HTTP ${res.status}`)
@@ -84,6 +101,8 @@ async function fetchBatch(words: Word[]): Promise<void> {
     await db.topics.bulkPut(topics.filter((t) => !existing.has(t.wordId)))
   })
   for (const r of rows) generated.set(r.wordId, r.content)
+  const topicOf = new Map(topics.map((t) => [t.wordId, t.topic]))
+  void uploadShared(rows.map((r) => ({ wordId: r.wordId, content: r.content, topic: topicOf.get(r.wordId), model: r.model })))
 }
 
 /**
@@ -98,8 +117,16 @@ export async function ensureContent(words: Word[], retry = false): Promise<void>
     failed.delete(w.id)
   }
   notify()
-  for (let i = 0; i < need.length; i += BATCH) {
-    const batch = need.slice(i, i + BATCH)
+  let missing = need
+  try {
+    missing = await fromLibrary(need)
+  } catch {
+    /* المكتبة غير متاحة: نولّد كالمعتاد */
+  }
+  for (const w of need) if (!missing.includes(w)) loading.delete(w.id)
+  notify()
+  for (let i = 0; i < missing.length; i += BATCH) {
+    const batch = missing.slice(i, i + BATCH)
     try {
       await fetchBatch(batch)
     } catch {

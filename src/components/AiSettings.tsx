@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { isStaticHost, setGeminiKey, testGeminiKey } from '../data/ai'
 import { importWordList, MIN_IMPORT_WORDS, removeImportedWordList } from '../db/loader'
 import { useGeminiKey, useLoadInfo } from '../db/hooks'
+import { useProfile } from '../data/roles'
 import { Button, Card } from './ui'
 
 /** استيراد قائمة الكلمات الكاملة من ملف على الجهاز (تبقى في المتصفح فقط). */
@@ -139,7 +140,9 @@ export function GeminiKeyForm() {
 export function SetupCard({ onOpenSettings }: { onOpenSettings: () => void }) {
   const key = useGeminiKey()
   const info = useLoadInfo()
-  if (key === undefined || !info) return null
+  const { profile } = useProfile()
+  // الطلاب والمعلمون يحصلون على القائمة والشرح مما يشاركه المالك.
+  if (key === undefined || !info || !profile?.owner) return null
   // على Vercel المفتاح في الخادم؛ على الموقع الثابت يحتاج المستخدم مفتاحه.
   const needKey = !key && isStaticHost()
   const needList = info.source === 'sample'

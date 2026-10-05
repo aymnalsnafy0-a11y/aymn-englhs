@@ -16,7 +16,17 @@ export interface AiResult {
 
 const KEY = 'geminiKey'
 
+/** مفتاح المستخدم الشخصي أولًا، وإلا المفتاح الذي شاركه المالك (إن سمح له). */
 export async function getGeminiKey(): Promise<string | undefined> {
+  for (const k of [KEY, 'sharedGeminiKey']) {
+    const row = await db.meta.get(k)
+    if (typeof row?.value === 'string' && row.value) return row.value
+  }
+  return undefined
+}
+
+/** المفتاح الشخصي فقط (للمشاركة من حساب المالك). */
+export async function getPersonalGeminiKey(): Promise<string | undefined> {
   const row = await db.meta.get(KEY)
   return typeof row?.value === 'string' && row.value ? row.value : undefined
 }

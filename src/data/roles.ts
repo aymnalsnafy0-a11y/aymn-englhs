@@ -8,7 +8,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import { generateCode, TEACHER_CODE_LENGTH } from '../lib/classroom'
-import { cloudSdk, signOutCloud } from './cloud'
+import { cloudSdk, signOutCloud, updateDisplayName } from './cloud'
 import type { ClassInfo } from './classroom'
 
 export type Role = 'student' | 'teacher'
@@ -22,6 +22,8 @@ export interface Profile {
   teacherExpired: boolean
   /** نهاية صلاحية المعلم (ms)، أو null = بلا انتهاء. */
   teacherExpiresAt: number | null
+  /** المالك سمح لهذا المعلم باستخدام مفتاح Gemini المشترك. */
+  teacherShareKey: boolean
   teacherName: string
   /** عدد فصول الطالب. */
   classes: number
@@ -33,6 +35,8 @@ export interface TeacherInvite {
   createdAt: number
   /** مدة الصلاحية بالأيام من التفعيل؛ 0 = بلا انتهاء. */
   days?: number
+  /** يستخدم المعلم مفتاح Gemini المشترك. */
+  shareKey?: boolean
   usedBy: string | null
   usedName?: string
   usedAt?: number
@@ -46,6 +50,7 @@ export interface Teacher {
   createdAt?: number
   /** ms، أو null = بلا انتهاء. */
   expiresAt: number | null
+  shareKey: boolean
 }
 
 /** خيارات مدة صلاحية المعلم (بالأيام). */
@@ -136,8 +141,31 @@ export function forgetProfile() {
   set({ profile: null, role: null, mode: 'teach', error: undefined })
 }
 
+/** يغيّر الاسم في الحساب، وفي سجل المعلم وعضوية الفصول حتى يراه الآخرون. */
+export async function setDisplayName(raw: string): Promise<void> {
+  const name = raw.trim().slice(0, 40)
+  await updateDisplayName(name)
+  if (!name) return
+  const { db, fs, uid } = await cloudSdk()
+  if (state.profile?.teacher || state.profile?.teacherExpired) {
+    await fs.updateDoc(fs.doc(db, 'teachers', uid), { name }).catch(() => {})
+    set({ profile: state.profile ? { ...state.profile, teacherName: name } : null })
+  }
+  const ref = fs.doc(db, 'learners', uid, 'state', 'english-classes')
+  const mine = await fs.getDoc(ref)
+  if (mine.exists() && Array.isArray(mine.data().codes) && mine.data().codes.length) {
+    const value = { codes: mine.data().codes as string[], name }
+    await fs.setDoc(ref, value)
+    const { db: local } = await import('../db/db')
+    await local.meta.put({ key: 'myClasses', value })
+    const { publishMemberStats } = await import('./classroom')
+    await publishMemberStats()
+  }
+}
+
 export async function logout(): Promise<void> {
   await signOutCloud()
+  await forgetSharedKey()
   forgetProfile()
 }
 
@@ -172,11 +200,14 @@ export function refreshProfile(): Promise<Profile | null> {
         teacher: !!teacher?.exists() && !expired,
         teacherExpired: expired,
         teacherExpiresAt: expiresAt,
+        teacherShareKey: !!teacher?.exists() && teacher.data()?.shareKey === true,
         teacherName: teacher?.exists() ? String(teacher.data()?.name ?? '') : '',
         classes: Array.isArray(codes) ? codes.length : 0,
       }
       write(KEYS.profile, profile)
       set({ profile, loading: false })
+      // الموارد المشتركة من المالك (المفتاح وقائمة الكلمات) في الخلفية.
+      void syncShared(profile).catch((e) => console.warn('[shared]', e))
       return profile
     } catch (e) {
       set({ loading: false, error: e })
@@ -195,7 +226,7 @@ export async function redeemTeacherCode(code: string, name: string): Promise<voi
   const inviteRef = fs.doc(db, 'teacherInvites', code)
   const invite = await fs.getDoc(inviteRef)
   if (!invite.exists()) throw Object.assign(new Error('not_found'), { code: 'teacher_code_not_found' })
-  const { usedBy, days = 0 } = invite.data() as Partial<TeacherInvite>
+  const { usedBy, days = 0, shareKey = false } = invite.data() as Partial<TeacherInvite>
   // الرمز لشخص واحد: صاحبه يستطيع إدخاله مرة أخرى (جهاز جديد مثلًا)، وغيره لا.
   if (usedBy === uid) {
     const p = await refreshProfile()
@@ -206,7 +237,7 @@ export async function redeemTeacherCode(code: string, name: string): Promise<voi
   const clean = name.trim().slice(0, 40)
   const expiresAt = days > 0 ? fs.Timestamp.fromMillis(Date.now() + days * 864e5) : null
   const batch = fs.writeBatch(db)
-  batch.set(fs.doc(db, 'teachers', uid), { name: clean, email, invite: code, createdAt: Date.now(), expiresAt })
+  batch.set(fs.doc(db, 'teachers', uid), { name: clean, email, invite: code, createdAt: Date.now(), expiresAt, shareKey })
   batch.update(inviteRef, { usedBy: uid, usedName: clean, usedAt: Date.now() })
   await batch.commit()
   await refreshProfile()
@@ -214,13 +245,13 @@ export async function redeemTeacherCode(code: string, name: string): Promise<voi
 
 // ——— المالك ———
 
-export async function createTeacherInvite(label: string, days: number): Promise<string> {
+export async function createTeacherInvite(label: string, days: number, shareKey: boolean): Promise<string> {
   const { db, fs, uid } = await cloudSdk()
   for (let i = 0; i < 5; i++) {
     const code = generateCode(Math.random, TEACHER_CODE_LENGTH)
     const ref = fs.doc(db, 'teacherInvites', code)
     if ((await fs.getDoc(ref)).exists()) continue
-    await fs.setDoc(ref, { label: label.trim().slice(0, 40), days, createdBy: uid, createdAt: Date.now(), usedBy: null })
+    await fs.setDoc(ref, { label: label.trim().slice(0, 40), days, shareKey, createdBy: uid, createdAt: Date.now(), usedBy: null })
     return code
   }
   throw new Error('code_collision')
@@ -245,7 +276,15 @@ export async function listTeachers(): Promise<Teacher[]> {
   return snap.docs
     .map((d) => {
       const data = d.data()
-      return { uid: d.id, name: String(data.name ?? ''), email: data.email, invite: data.invite, createdAt: data.createdAt, expiresAt: millis(data.expiresAt) }
+      return {
+        uid: d.id,
+        name: String(data.name ?? ''),
+        email: data.email,
+        invite: data.invite,
+        createdAt: data.createdAt,
+        expiresAt: millis(data.expiresAt),
+        shareKey: data.shareKey === true,
+      }
     })
     .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
 }
@@ -261,6 +300,103 @@ export async function extendTeacher(t: Teacher, days: number): Promise<void> {
 export async function revokeTeacher(uid: string): Promise<void> {
   const { db, fs } = await cloudSdk()
   await fs.deleteDoc(fs.doc(db, 'teachers', uid))
+}
+
+export async function setTeacherShareKey(uid: string, shareKey: boolean): Promise<void> {
+  const { db, fs } = await cloudSdk()
+  await fs.updateDoc(fs.doc(db, 'teachers', uid), { shareKey })
+}
+
+// ——— الموارد المشتركة من المالك ———
+
+const SHARED_KEY = 'sharedGeminiKey'
+
+export interface SharedState {
+  wordlist: { name: string; count: number; importedAt: number } | null
+  key: boolean
+  studentsUseKey: boolean
+}
+
+/** للمالك: ما الذي يشاركه الآن. */
+export async function sharedState(): Promise<SharedState> {
+  const { db, fs } = await cloudSdk()
+  const [list, key, ai] = await Promise.all([
+    fs.getDoc(fs.doc(db, 'config', 'wordlist')),
+    fs.getDoc(fs.doc(db, 'secrets', 'gemini')),
+    fs.getDoc(fs.doc(db, 'config', 'ai')),
+  ])
+  const l = list.exists() ? list.data() : null
+  return {
+    wordlist: l ? { name: String(l.name ?? ''), count: Number(l.count ?? 0), importedAt: Number(l.importedAt ?? 0) } : null,
+    key: key.exists() && !!key.data().key,
+    studentsUseKey: ai.exists() && ai.data().studentsUseKey === true,
+  }
+}
+
+/** يرفع قائمة الكلمات المستوردة في هذا الجهاز ليستخدمها كل من يسجّل الدخول. */
+export async function shareWordList(): Promise<number> {
+  const { collectWordList } = await import('../db/syncData')
+  const list = await collectWordList()
+  if (!list) throw Object.assign(new Error('no_list'), { code: 'no_word_list' })
+  const { parseWordList } = await import('../lib/csv')
+  const count = parseWordList(list.text).words.length
+  const { db, fs } = await cloudSdk()
+  await fs.setDoc(fs.doc(db, 'config', 'wordlist'), { ...list, count })
+  return count
+}
+
+export async function unshareWordList(): Promise<void> {
+  const { db, fs } = await cloudSdk()
+  await fs.deleteDoc(fs.doc(db, 'config', 'wordlist'))
+}
+
+/** يرفع مفتاح Gemini المحفوظ في هذا الجهاز ليستخدمه المسموح لهم. */
+export async function shareGeminiKey(): Promise<void> {
+  const { getPersonalGeminiKey } = await import('./ai')
+  const key = await getPersonalGeminiKey()
+  if (!key) throw Object.assign(new Error('no_key'), { code: 'no_gemini_key' })
+  const { db, fs } = await cloudSdk()
+  await fs.setDoc(fs.doc(db, 'secrets', 'gemini'), { key, updatedAt: Date.now() })
+}
+
+export async function unshareGeminiKey(): Promise<void> {
+  const { db, fs } = await cloudSdk()
+  await fs.deleteDoc(fs.doc(db, 'secrets', 'gemini'))
+}
+
+export async function setStudentsUseKey(on: boolean): Promise<void> {
+  const { db, fs } = await cloudSdk()
+  await fs.setDoc(fs.doc(db, 'config', 'ai'), { studentsUseKey: on }, { merge: true })
+}
+
+/**
+ * بعد كل دخول: نأخذ المفتاح المشترك إن كان مسموحًا لنا (وإلا نحذف نسخته من الجهاز)،
+ * وقائمة الكلمات المشتركة إن لم يستورد المستخدم قائمته الخاصة.
+ */
+async function syncShared(profile: Profile): Promise<void> {
+  const { db: local } = await import('../db/db')
+  const { db, fs } = await cloudSdk()
+  // المالك يستخدم مفتاحه الشخصي. غيره: القواعد تقرر (مسموح له أو مرفوض).
+  const snap = profile.owner ? null : await fs.getDoc(fs.doc(db, 'secrets', 'gemini')).catch(() => null)
+  const key = snap?.exists() ? String(snap.data().key ?? '') : ''
+  if (key) await local.meta.put({ key: SHARED_KEY, value: key })
+  else await local.meta.delete(SHARED_KEY)
+
+  const list = await fs.getDoc(fs.doc(db, 'config', 'wordlist')).catch(() => null)
+  if (!list?.exists()) return
+  const shared = list.data() as { text: string; name: string; importedAt: number }
+  const { collectWordList, applyWordList } = await import('../db/syncData')
+  const mine = await collectWordList()
+  // قائمة المستخدم الخاصة (غير المشتركة) لها الأولوية؛ المشتركة تُحدَّث إن صارت أحدث.
+  const fromShared = mine?.name === shared.name
+  if (!mine || (fromShared && mine.importedAt < shared.importedAt)) {
+    await applyWordList({ text: shared.text, name: shared.name, importedAt: shared.importedAt })
+  }
+}
+
+export async function forgetSharedKey(): Promise<void> {
+  const { db: local } = await import('../db/db')
+  await local.meta.delete(SHARED_KEY)
 }
 
 export async function allClasses(): Promise<ClassInfo[]> {

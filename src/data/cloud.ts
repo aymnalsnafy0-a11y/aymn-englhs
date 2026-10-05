@@ -192,6 +192,14 @@ export async function resetPassword(email: string): Promise<string> {
   }
 }
 
+/** الاسم المعروض (اختياري) في حساب Firebase. */
+export async function updateDisplayName(name: string): Promise<void> {
+  const { auth, au } = await init()
+  if (!auth.currentUser) throw Object.assign(new Error('signed_out'), { code: 'signed_out' })
+  await au.updateProfile(auth.currentUser, { displayName: name || null })
+  set({ name: name || undefined })
+}
+
 export async function signOutCloud(): Promise<void> {
   if (!sdk) return
   await syncNow()

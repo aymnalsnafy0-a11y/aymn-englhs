@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignmentReport, assignmentState, formatCode, generateCode, nextResult, normalizeCode, studentHomework, type Assignment } from './classroom'
+import { assignmentReport, assignmentState, formatCode, generateCode, attemptsLeft, isAssignedTo, nextResult, normalizeCode, studentHomework, type Assignment } from './classroom'
 import { seededRng } from './quiz'
 
 const dayOf = (ts: number) => new Date(ts).toISOString().slice(0, 10)
@@ -101,5 +101,24 @@ describe('studentHomework', () => {
   })
   it('has no average before any submission', () => {
     expect(studentHomework('s9', [a1], results, '2026-10-12', dayOf).average).toBeNull()
+  })
+})
+
+describe('targeted assignments and attempts', () => {
+  const base: Assignment = { id: 'a1', title: 'خاص', words: [], createdAt: 0 }
+  it('limits an assignment to chosen students', () => {
+    const a = { ...base, to: ['s1'] }
+    expect(isAssignedTo(a, 's1')).toBe(true)
+    expect(isAssignedTo(a, 's2')).toBe(false)
+    expect(isAssignedTo(base, 's2')).toBe(true)
+    const r = assignmentReport(a, [{ uid: 's1', name: 'سارة' }, { uid: 's2', name: 'علي' }], [], '2026-10-12', dayOf)
+    expect(r.rows.map((x) => x.uid)).toEqual(['s1'])
+    expect(studentHomework('s2', [a], {}, '2026-10-12', dayOf).total).toBe(0)
+  })
+  it('counts attempts left', () => {
+    expect(attemptsLeft(base, { attempts: 5 })).toBeNull()
+    expect(attemptsLeft({ maxAttempts: 1 }, null)).toBe(1)
+    expect(attemptsLeft({ maxAttempts: 1 }, { attempts: 1 })).toBe(0)
+    expect(attemptsLeft({ maxAttempts: 3 }, { attempts: 1 })).toBe(2)
   })
 })

@@ -6,6 +6,7 @@
 import { db as local } from '../db/db'
 import {
   generateCode,
+  isAssignedTo,
   nextResult,
   type Assignment,
   type AssignmentWord,
@@ -22,6 +23,9 @@ export interface ClassInfo {
   teacherUid: string
   teacherName: string
   createdAt?: number
+  /** المعلمون المشاركون (uid) وأسماؤهم — يعيّنهم المالك. */
+  teachers?: string[]
+  teacherNames?: Record<string, string>
   /** عدد الطلاب (يُحسب للمعلم فقط). */
   students?: number
 }
@@ -57,12 +61,38 @@ export async function createClass(name: string, teacherName: string): Promise<Cl
   throw new Error('code_collision')
 }
 
+/** فصول المعلم: التي يملكها والتي هو مشارك فيها. */
 export async function myTeacherClasses(): Promise<ClassInfo[]> {
   const { db, fs, uid } = await cloudSdk()
-  const snap = await fs.getDocs(fs.query(fs.collection(db, 'classes'), fs.where('teacherUid', '==', uid)))
-  return withStudentCounts(
-    snap.docs.map((d) => ({ code: d.id, ...(d.data() as Omit<ClassInfo, 'code'>) })).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
-  )
+  const col = fs.collection(db, 'classes')
+  const [own, co] = await Promise.all([
+    fs.getDocs(fs.query(col, fs.where('teacherUid', '==', uid))),
+    fs.getDocs(fs.query(col, fs.where('teachers', 'array-contains', uid))).catch(() => null),
+  ])
+  const byCode = new Map<string, ClassInfo>()
+  for (const d of [...own.docs, ...(co?.docs ?? [])]) byCode.set(d.id, { code: d.id, ...(d.data() as Omit<ClassInfo, 'code'>) })
+  return withStudentCounts([...byCode.values()].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)))
+}
+
+/** للمالك: المعلمون المشاركون في الفصل. */
+export async function setCoTeachers(code: string, teachers: { uid: string; name: string }[]): Promise<void> {
+  const { db, fs } = await cloudSdk()
+  await fs.updateDoc(fs.doc(db, 'classes', code), {
+    teachers: teachers.map((t) => t.uid),
+    teacherNames: Object.fromEntries(teachers.map((t) => [t.uid, t.name])),
+  })
+}
+
+/** للمالك: نقل الفصل لمعلم آخر (الطلاب والواجبات والنتائج تبقى كما هي). */
+export async function transferClass(code: string, to: { uid: string; name: string }, keepCo: { uid: string; name: string }[]): Promise<void> {
+  const { db, fs } = await cloudSdk()
+  const co = keepCo.filter((t) => t.uid !== to.uid)
+  await fs.updateDoc(fs.doc(db, 'classes', code), {
+    teacherUid: to.uid,
+    teacherName: to.name,
+    teachers: co.map((t) => t.uid),
+    teacherNames: Object.fromEntries(co.map((t) => [t.uid, t.name])),
+  })
 }
 
 export async function deleteClass(code: string): Promise<void> {
@@ -221,8 +251,9 @@ export async function pendingHomework(): Promise<{ count: number; firstCode?: st
   if (!cached?.codes.length) return { count: 0 }
   let count = 0
   let firstCode: string | undefined
+  const { uid } = await cloudSdk()
   for (const code of cached.codes) {
-    const assignments = await listAssignments(code).catch(() => [])
+    const assignments = (await listAssignments(code).catch(() => [])).filter((a) => isAssignedTo(a, uid))
     const results = await Promise.all(assignments.map((a) => getMyResult(code, a.id).catch(() => null)))
     const open = results.filter((r) => !r).length
     if (open && !firstCode) firstCode = code

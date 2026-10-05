@@ -1,6 +1,7 @@
 import { Card, Screen } from '../../components/ui'
 import { getClass, getMyResult, listAssignments } from '../../data/classroom'
-import { assignmentState, type AssignmentState } from '../../lib/classroom'
+import { cloudSdk } from '../../data/cloud'
+import { assignmentState, attemptsLeft, isAssignedTo, type AssignmentState } from '../../lib/classroom'
 import { toDayKey } from '../../lib/dates'
 import { cloudErrorText, useAsync } from '../../lib/useAsync'
 
@@ -14,7 +15,9 @@ const BADGE: Record<AssignmentState, { label: string; cls: string }> = {
 /** واجبات فصل واحد للطالب، الجديدة أولًا. */
 export function StudentClass({ code, onBack, open }: { code: string; onBack: () => void; open: (id: string) => void }) {
   const data = useAsync(async () => {
-    const [info, assignments] = await Promise.all([getClass(code), listAssignments(code)])
+    const [info, all, { uid }] = await Promise.all([getClass(code), listAssignments(code), cloudSdk()])
+    // واجب لطلاب محددين يظهر لهم فقط.
+    const assignments = all.filter((a) => isAssignedTo(a, uid))
     const results = await Promise.all(assignments.map((a) => getMyResult(code, a.id).catch(() => null)))
     return { info, items: assignments.map((a, i) => ({ a, r: results[i] })) }
   }, [code])
@@ -34,7 +37,9 @@ export function StudentClass({ code, onBack, open }: { code: string; onBack: () 
 
   return (
     <Screen title={data.data.info.name} onBack={onBack}>
-      <p className="mb-3 text-slate-500">المدرس: {data.data.info.teacherName}</p>
+      <p className="mb-3 text-slate-500">
+        المعلم: {[data.data.info.teacherName, ...Object.values(data.data.info.teacherNames ?? {})].filter(Boolean).join('، ')}
+      </p>
       {items.length === 0 ? (
         <Card className="text-center text-slate-500">لا توجد واجبات بعد.</Card>
       ) : (
@@ -56,6 +61,11 @@ export function StudentClass({ code, onBack, open }: { code: string; onBack: () 
                 <span className="flex shrink-0 flex-col items-end gap-1">
                   <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${BADGE[state].cls}`}>{BADGE[state].label}</span>
                   {r && <span className="text-sm tabular-nums">{r.score}/{r.total}</span>}
+                  {a.maxAttempts ? (
+                    <span className="text-xs text-slate-500">
+                      {attemptsLeft(a, r) ? `باقي ${attemptsLeft(a, r)} محاولة` : 'انتهت المحاولات'}
+                    </span>
+                  ) : null}
                 </span>
               </button>
             </li>

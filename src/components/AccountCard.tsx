@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { openAccount, resetPassword, signIn, signInWithGoogle, syncNow, useCloudStatus } from '../data/cloud'
-import { logout, useProfile } from '../data/roles'
+import { logout, setDisplayName, useProfile } from '../data/roles'
 import { Button } from './ui'
 
 function timeAgo(ts: number): string {
@@ -16,6 +16,8 @@ export function AccountCard({ intro }: { intro?: string }) {
   const cloud = useCloudStatus()
   const { profile } = useProfile()
   const [copied, setCopied] = useState(false)
+  const [name, setName] = useState<string | null>(null)
+  const [nameMsg, setNameMsg] = useState<string | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -32,7 +34,34 @@ export function AccountCard({ intro }: { intro?: string }) {
             </span>
           )}
         </p>
-        <p className="mt-1 text-sm text-slate-500" aria-live="polite">
+        <form
+          className="mt-3 flex flex-wrap items-center gap-2"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            setNameMsg(null)
+            try {
+              await setDisplayName(name ?? cloud.name ?? '')
+              setName(null)
+              setNameMsg('✓ حُفظ الاسم')
+            } catch {
+              setNameMsg('تعذّر الحفظ. حاول مرة أخرى.')
+            }
+          }}
+        >
+          <input
+            aria-label="اسمك (اختياري)"
+            placeholder="اسمك (اختياري) — يظهر بدل الإيميل"
+            value={name ?? cloud.name ?? ''}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={40}
+            className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-slate-300 focus:ring-2 focus:ring-teal-600 focus:outline-none dark:bg-slate-950 dark:ring-slate-700"
+          />
+          <Button type="submit" variant="secondary" disabled={name === null}>
+            احفظ الاسم
+          </Button>
+          {nameMsg && <span className="text-sm text-teal-700 dark:text-teal-400">{nameMsg}</span>}
+        </form>
+        <p className="mt-2 text-sm text-slate-500" aria-live="polite">
           {cloud.syncing ? 'جارٍ المزامنة…' : cloud.lastSync ? `آخر مزامنة: ${timeAgo(cloud.lastSync)}` : 'لم تتم المزامنة بعد'}
         </p>
         {cloud.error && <p className="mt-1 text-sm text-rose-700 dark:text-rose-400">{cloud.error}</p>}

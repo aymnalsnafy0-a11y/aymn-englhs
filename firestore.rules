@@ -3,10 +3,13 @@ rules_version = '2';
 // قواعد Firestore لموقع سياق (مشروع engle-e9877).
 // - owners: مالك الموقع — يُضاف يدويًا من لوحة Firebase فقط (لا يكتبه أحد من الموقع).
 // - teachers: المعلمون — كل معلم يفعّل حسابه برمز من المالك (teacherInvites). الرمز لشخص واحد،
-//   ومدة الصلاحية يحددها المالك (days، و0 = بلا انتهاء) ويمكنه تمديدها.
+//   ومدة الصلاحية يحددها المالك (days، و0 = بلا انتهاء) ويمكنه تمديدها. shareKey: يستخدم مفتاح Gemini المشترك.
+// - config: إعدادات يشاركها المالك (قائمة الكلمات للجميع، والسماح للطلاب بالمفتاح).
+// - secrets/gemini: مفتاح المالك المشترك — للمالك وللمعلمين المسموح لهم (وللطلاب إن سمح المالك).
+// - wordContent: مكتبة شرح الكلمات المشتركة — يقرؤها كل مسجّل، ويكتبها من يملك مفتاحًا.
 // - learners: بيانات كل متعلم الخاصة — صاحبها فقط.
-// - classes: فصول المدرس. الرمز هو معرّف الفصل (يُعطى للطلاب).
-//   الطالب يرى واجبات فصله ونتيجته فقط؛ المدرس يرى طلاب فصوله ونتائجهم.
+// - classes: فصول المعلمين. الرمز هو معرّف الفصل (يُعطى للطلاب). للفصل معلم رئيسي ومعلمون مشاركون.
+//   الطالب يرى واجبات فصله ونتيجته فقط؛ المعلم يرى طلاب فصوله ونتائجهم؛ المالك يرى كل شيء.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -16,20 +19,36 @@ service cloud.firestore {
     function isOwner() {
       return signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid));
     }
-    // المعلم الفعّال: عنده مستند في teachers ولم تنتهِ مدته (expiresAt فارغ = بلا انتهاء).
-    function isStaff() {
-      return isOwner() || (signedIn()
-        && exists(/databases/$(database)/documents/teachers/$(request.auth.uid))
-        && (get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.get('expiresAt', null) == null
-          || get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data.expiresAt > request.time));
+    function teacherDoc() {
+      return get(/databases/$(database)/documents/teachers/$(request.auth.uid)).data;
     }
-    // تفعيل برمز: الرمز غير مستخدم، ويُعلَّم في نفس الدفعة باسم هذا الحساب، والمدة لا تتجاوز ما حدده المالك.
+    function isActiveTeacher() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/teachers/$(request.auth.uid))
+        && (teacherDoc().get('expiresAt', null) == null || teacherDoc().expiresAt > request.time);
+    }
+    // المعلم الفعّال (لم تنتهِ مدته) أو المالك.
+    function isStaff() {
+      return isOwner() || isActiveTeacher();
+    }
+    function studentsUseKey() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/config/ai)
+        && get(/databases/$(database)/documents/config/ai).data.get('studentsUseKey', false) == true;
+    }
+    // من يحق له استخدام المفتاح المشترك.
+    function mayUseSharedKey() {
+      return isOwner() || (isActiveTeacher() && teacherDoc().get('shareKey', false) == true) || studentsUseKey();
+    }
+    // تفعيل برمز: الرمز غير مستخدم، ويُعلَّم في نفس الدفعة باسم هذا الحساب،
+    // والمدة لا تتجاوز ما حدده المالك، وإذن المفتاح كما في الرمز.
     function inviteOk(data) {
       let inv = /databases/$(database)/documents/teacherInvites/$(data.invite);
       let days = get(inv).data.get('days', 0);
       return data.invite is string
         && get(inv).data.usedBy == null
         && getAfter(inv).data.usedBy == request.auth.uid
+        && data.get('shareKey', false) == get(inv).data.get('shareKey', false)
         && (days == 0
           ? data.get('expiresAt', null) == null
           : (data.expiresAt is timestamp && data.expiresAt <= request.time + duration.value(days + 1, 'd')));
@@ -40,6 +59,24 @@ service cloud.firestore {
 
     match /owners/{uid} {
       allow get: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /config/{doc} {
+      allow get: if signedIn();
+      allow write: if isOwner();
+    }
+
+    match /secrets/{doc} {
+      allow get: if mayUseSharedKey();
+      allow write: if isOwner();
+    }
+
+    match /wordContent/{id} {
+      allow read: if signedIn();
+      allow create, update: if (isStaff() || studentsUseKey())
+        && request.resource.data.keys().hasOnly(['content', 'topic', 'model', 'createdAt'])
+        && request.resource.data.content is map;
+      allow delete: if isOwner();
     }
 
     // رموز المعلمين: المالك يُنشئها ويراها كلها؛ من يعرف الرمز يقرؤه، وأول حساب يستخدمه يصبح صاحبه.
@@ -61,7 +98,7 @@ service cloud.firestore {
       // التفعيل (أو التجديد برمز جديد بعد انتهاء المدة).
       allow create: if signedIn() && request.auth.uid == uid && validName(request.resource.data)
         && (isOwner() || inviteOk(request.resource.data));
-      // المعلم يغيّر اسمه فقط أو يجدد برمز جديد؛ المالك يمدد المدة.
+      // المعلم يغيّر اسمه فقط أو يجدد برمز جديد؛ المالك يمدد المدة ويغيّر إذن المفتاح.
       allow update: if isOwner() || (signedIn() && request.auth.uid == uid && validName(request.resource.data)
         && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) || inviteOk(request.resource.data)));
     }
@@ -71,23 +108,35 @@ service cloud.firestore {
     }
 
     match /classes/{code} {
-      // معلم الفصل (ما دامت صلاحيته قائمة) أو المالك.
+      function classDoc() {
+        return get(/databases/$(database)/documents/classes/$(code)).data;
+      }
+      // المعلم الرئيسي أو مشارك (ما دامت صلاحيته قائمة) أو المالك.
       function isTeacher() {
-        return isOwner() || (isStaff() && get(/databases/$(database)/documents/classes/$(code)).data.teacherUid == request.auth.uid);
+        return isOwner() || (isActiveTeacher()
+          && (classDoc().teacherUid == request.auth.uid || request.auth.uid in classDoc().get('teachers', [])));
+      }
+      function isMainTeacher() {
+        return isOwner() || (isActiveTeacher() && classDoc().teacherUid == request.auth.uid);
       }
       function isMember() {
         return signedIn() && exists(/databases/$(database)/documents/classes/$(code)/members/$(request.auth.uid));
       }
 
-      // من يعرف الرمز يقرأ اسم الفصل لينضم. القائمة: المدرس يرى فصوله، والمالك يرى كل الفصول.
+      // من يعرف الرمز يقرأ اسم الفصل لينضم. القائمة: المعلم يرى فصوله (رئيسيًا أو مشاركًا)، والمالك يرى كل الفصول.
       allow get: if signedIn();
-      allow list: if (signedIn() && resource.data.teacherUid == request.auth.uid) || isOwner();
+      allow list: if isOwner() || (signedIn()
+        && (resource.data.teacherUid == request.auth.uid || request.auth.uid in resource.data.get('teachers', [])));
       allow create: if isStaff()
         && request.resource.data.teacherUid == request.auth.uid
+        && request.resource.data.get('teachers', []).size() == 0
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 60;
-      allow update: if isTeacher() && request.resource.data.teacherUid == resource.data.teacherUid;
-      allow delete: if isTeacher();
+      // نقل الفصل وتعيين المشاركين للمالك فقط.
+      allow update: if isOwner() || (isTeacher()
+        && request.resource.data.teacherUid == resource.data.teacherUid
+        && request.resource.data.get('teachers', []) == resource.data.get('teachers', []));
+      allow delete: if isMainTeacher();
 
       match /members/{uid} {
         allow read: if signedIn() && (request.auth.uid == uid || isTeacher());
@@ -98,12 +147,25 @@ service cloud.firestore {
       }
 
       match /assignments/{aid} {
+        function assignment() {
+          return get(/databases/$(database)/documents/classes/$(code)/assignments/$(aid)).data;
+        }
+        function forMe() {
+          return assignment().get('to', []).size() == 0 || request.auth.uid in assignment().get('to', []);
+        }
+        // عدد المحاولات: يزيد واحدًا في كل حل، ولا يتجاوز الحد إن وُجد.
+        function attemptOk(prev) {
+          let max = assignment().get('maxAttempts', 0);
+          return request.resource.data.attempts == prev + 1 && (max == 0 || request.resource.data.attempts <= max);
+        }
+
         allow read: if isTeacher() || isMember();
         allow create, update, delete: if isTeacher();
 
         match /results/{uid} {
           allow read: if signedIn() && (request.auth.uid == uid || isTeacher());
-          allow create, update: if isMember() && request.auth.uid == uid;
+          allow create: if isMember() && request.auth.uid == uid && forMe() && attemptOk(0);
+          allow update: if isMember() && request.auth.uid == uid && forMe() && attemptOk(resource.data.get('attempts', 0));
           allow delete: if isTeacher();
         }
       }

@@ -9,6 +9,7 @@ import { db } from '../../db/db'
 import { buildQuiz, type Question, type QuizWord } from '../../lib/quiz'
 import { speechSupported, stopSpeaking } from '../../lib/speech'
 import { levelIndex, wordId, type Word } from '../../lib/types'
+import { attemptsLabel, attemptsLeft } from '../../lib/classroom'
 import { cloudErrorText, useAsync } from '../../lib/useAsync'
 import { QuestionView } from '../Quiz'
 import { exerciseLabel, type Exercise } from '../../lib/exercises'
@@ -47,6 +48,9 @@ function Runner({ code, a, prev, onBack }: { code: string; a: Assignment; prev: 
   const [attempt, setAttempt] = useState(0)
   const [saved, setSaved] = useState<{ score: number; total: number; best: number; attempts: number } | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  // المحاولات المستخدمة (من الخادم ثم تزيد مع كل إرسال).
+  const [used, setUsed] = useState(prev?.attempts ?? 0)
+  const left = attemptsLeft(a, { attempts: used })
 
   const items = useMemo<Item[]>(() => {
     const exItems: Item[] = (a.exercises ?? []).map((ex, index) => ({ kind: 'ex', ex, index }))
@@ -77,6 +81,7 @@ function Runner({ code, a, prev, onBack }: { code: string; a: Assignment; prev: 
     const score = all.filter(Boolean).length
     try {
       const r = await submitResult(code, a.id, score, items.length, wrong, wrongQ)
+      setUsed(r.attempts)
       setSaved({ score, total: items.length, best: r.best, attempts: r.attempts })
     } catch (e) {
       setSaved({ score, total: items.length, best: score, attempts: 1 })
@@ -99,14 +104,21 @@ function Runner({ code, a, prev, onBack }: { code: string; a: Assignment; prev: 
               </li>
             )}
           </ul>
+          {a.maxAttempts ? <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">🔁 {attemptsLabel(a.maxAttempts)}</p> : null}
           {prev && (
             <p className="mb-4 text-sm text-teal-700 dark:text-teal-400">
               حلّيته من قبل: آخر نتيجة {prev.score}/{prev.total} · أفضل نتيجة {prev.best} · {prev.attempts} محاولة
             </p>
           )}
-          <Button className="w-full" onClick={() => setStage(a.words.length ? 'cards' : 'test')}>
-            {prev ? 'أعد المحاولة' : 'ابدأ الواجب'}
-          </Button>
+          {left === 0 ? (
+            <p className="rounded-xl bg-slate-100 p-3 text-center text-sm dark:bg-slate-800">
+              {a.maxAttempts === 1 ? 'هذا الواجب يُحل مرة واحدة فقط، وقد حللته.' : 'استخدمت كل المحاولات المسموحة لهذا الواجب.'}
+            </p>
+          ) : (
+            <Button className="w-full" onClick={() => setStage(a.words.length ? 'cards' : 'test')}>
+              {prev ? `أعد المحاولة${left !== null ? ` (باقي ${left})` : ''}` : 'ابدأ الواجب'}
+            </Button>
+          )}
         </Card>
       </Screen>
     )
@@ -196,18 +208,20 @@ function Runner({ code, a, prev, onBack }: { code: string; a: Assignment; prev: 
         )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Button onClick={exit}>رجوع للواجبات</Button>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setAnswers([])
-              setSaved(null)
-              setSaveError(null)
-              setAttempt((n) => n + 1)
-              setStage('test')
-            }}
-          >
-            أعد المحاولة
-          </Button>
+          {left !== 0 && (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setAnswers([])
+                setSaved(null)
+                setSaveError(null)
+                setAttempt((n) => n + 1)
+                setStage('test')
+              }}
+            >
+              أعد المحاولة{left !== null ? ` (باقي ${left})` : ''}
+            </Button>
+          )}
         </div>
       </Card>
     </Screen>

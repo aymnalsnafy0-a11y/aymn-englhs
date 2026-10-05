@@ -178,9 +178,9 @@ describe('assignments and results', () => {
   })
 
   it('a student writes and reads only their own result', async () => {
-    await assertSucceeds(setDoc(doc(as('s1'), 'classes/ABC123/assignments/a1/results/s1'), { score: 5, total: 5 }))
-    await assertFails(setDoc(doc(as('s1'), 'classes/ABC123/assignments/a1/results/s2'), { score: 0, total: 5 }))
-    await assertFails(setDoc(doc(as('s9'), 'classes/ABC123/assignments/a1/results/s9'), { score: 5, total: 5 }))
+    await assertSucceeds(setDoc(doc(as('s1'), 'classes/ABC123/assignments/a1/results/s1'), { score: 5, total: 5, attempts: 1 }))
+    await assertFails(setDoc(doc(as('s1'), 'classes/ABC123/assignments/a1/results/s2'), { score: 0, total: 5, attempts: 1 }))
+    await assertFails(setDoc(doc(as('s9'), 'classes/ABC123/assignments/a1/results/s9'), { score: 5, total: 5, attempts: 1 }))
     await assertSucceeds(getDoc(doc(as('s1'), 'classes/ABC123/assignments/a1/results/s1')))
   })
 
@@ -191,5 +191,101 @@ describe('assignments and results', () => {
     await assertFails(getDoc(doc(as('s2'), 'classes/ABC123/assignments/a1/results/s1')))
     await assertFails(getDocs(collection(as('s2'), 'classes/ABC123/assignments/a1/results')))
     await assertSucceeds(getDocs(collection(as('t1'), 'classes/ABC123/assignments/a1/results')))
+  })
+})
+
+describe('attempts, targeted homework, co-teachers', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'classes/ABC123/members/s2'), { name: 'علي' })
+      await setDoc(doc(db, 'classes/ABC123/assignments/once'), { title: 'مرة', words: [], maxAttempts: 1 })
+      await setDoc(doc(db, 'classes/ABC123/assignments/two'), { title: 'مرتين', words: [], maxAttempts: 2 })
+      await setDoc(doc(db, 'classes/ABC123/assignments/only1'), { title: 'لسارة', words: [], to: ['s1'] })
+    })
+  })
+
+  it('enforces the attempt limit', async () => {
+    const r = (n: number) => ({ score: 1, total: 2, attempts: n })
+    await assertSucceeds(setDoc(doc(as('s2'), 'classes/ABC123/assignments/once/results/s2'), r(1)))
+    await assertFails(setDoc(doc(as('s2'), 'classes/ABC123/assignments/once/results/s2'), r(2)))
+    await assertSucceeds(setDoc(doc(as('s2'), 'classes/ABC123/assignments/two/results/s2'), r(1)))
+    await assertFails(setDoc(doc(as('s2'), 'classes/ABC123/assignments/two/results/s2'), r(1)))
+    await assertSucceeds(setDoc(doc(as('s2'), 'classes/ABC123/assignments/two/results/s2'), r(2)))
+    await assertFails(setDoc(doc(as('s2'), 'classes/ABC123/assignments/two/results/s2'), r(3)))
+  })
+
+  it('only the chosen students submit a targeted assignment', async () => {
+    await assertSucceeds(setDoc(doc(as('s1'), 'classes/ABC123/assignments/only1/results/s1'), { score: 1, total: 1, attempts: 1 }))
+    await assertFails(setDoc(doc(as('s2'), 'classes/ABC123/assignments/only1/results/s2'), { score: 1, total: 1, attempts: 1 }))
+  })
+
+  it('the owner adds a co-teacher, who then manages the class but cannot delete or reassign it', async () => {
+    await assertFails(updateDoc(doc(as('t1'), 'classes/ABC123'), { teachers: ['t2'] }))
+    await assertSucceeds(updateDoc(doc(as('o1'), 'classes/ABC123'), { teachers: ['t2'] }))
+    await assertSucceeds(getDocs(collection(as('t2'), 'classes/ABC123/members')))
+    await assertSucceeds(getDocs(query(collection(as('t2'), 'classes'), where('teachers', 'array-contains', 't2'))))
+    await assertSucceeds(setDoc(doc(as('t2'), 'classes/ABC123/assignments/co'), { title: 'من المشارك', words: [] }))
+    await assertFails(deleteDoc(doc(as('t2'), 'classes/ABC123')))
+    await assertFails(updateDoc(doc(as('t2'), 'classes/ABC123'), { teacherUid: 't2' }))
+  })
+
+  it('the owner transfers a class to another teacher', async () => {
+    await assertSucceeds(updateDoc(doc(as('o1'), 'classes/ABC123'), { teacherUid: 't2', teacherName: 'أ. سالم' }))
+    await assertSucceeds(getDocs(collection(as('t2'), 'classes/ABC123/members')))
+    await assertFails(getDocs(collection(as('t1'), 'classes/ABC123/members')))
+  })
+})
+
+describe('shared resources', () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'secrets/gemini'), { key: 'k' })
+      await setDoc(doc(db, 'teachers/tk'), { name: 'مع مفتاح', shareKey: true })
+      await setDoc(doc(db, 'teacherInvites/KEYS2345'), { label: 'x', usedBy: null, days: 0, shareKey: true })
+    })
+  })
+
+  it('everyone signed in reads the shared word list; only the owner writes it', async () => {
+    await assertSucceeds(setDoc(doc(as('o1'), 'config/wordlist'), { text: 'w' }))
+    await assertSucceeds(getDoc(doc(as('s9'), 'config/wordlist')))
+    await assertFails(getDoc(doc(anon(), 'config/wordlist')))
+    await assertFails(setDoc(doc(as('t1'), 'config/wordlist'), { text: 'x' }))
+  })
+
+  it('the shared key reaches only allowed teachers, and students only if the owner allows', async () => {
+    await assertSucceeds(getDoc(doc(as('o1'), 'secrets/gemini')))
+    await assertSucceeds(getDoc(doc(as('tk'), 'secrets/gemini')))
+    await assertFails(getDoc(doc(as('t1'), 'secrets/gemini')))
+    await assertFails(getDoc(doc(as('s1'), 'secrets/gemini')))
+    await assertFails(setDoc(doc(as('tk'), 'secrets/gemini'), { key: 'mine' }))
+    await setDoc(doc(as('o1'), 'config/ai'), { studentsUseKey: true })
+    await assertSucceeds(getDoc(doc(as('s1'), 'secrets/gemini')))
+  })
+
+  it('a teacher cannot grant themself the key', async () => {
+    await assertFails(updateDoc(doc(as('t1'), 'teachers/t1'), { shareKey: true }))
+    await assertFails(redeem('n8', 'FREE2345').then(() => updateDoc(doc(as('n8'), 'teachers/n8'), { shareKey: true })))
+    const db = as('n9')
+    const batch = writeBatch(db)
+    batch.set(doc(db, 'teachers/n9'), { name: 'x', invite: 'FREE2345', expiresAt: null, shareKey: true })
+    batch.update(doc(db, 'teacherInvites/FREE2345'), { usedBy: 'n9', usedName: 'x', usedAt: 1 })
+    await assertFails(batch.commit())
+    const db2 = as('n10')
+    const ok = writeBatch(db2)
+    ok.set(doc(db2, 'teachers/n10'), { name: 'x', invite: 'KEYS2345', expiresAt: null, shareKey: true })
+    ok.update(doc(db2, 'teacherInvites/KEYS2345'), { usedBy: 'n10', usedName: 'x', usedAt: 1 })
+    await assertSucceeds(ok.commit())
+  })
+
+  it('the word-explanation library: everyone reads, teachers write, students only with the key allowed', async () => {
+    const c = { content: { meaningAr: 'ماء' }, model: 'm', createdAt: 1 }
+    await assertSucceeds(setDoc(doc(as('t1'), 'wordContent/water|n'), c))
+    await assertSucceeds(getDoc(doc(as('s1'), 'wordContent/water|n')))
+    await assertFails(setDoc(doc(as('s1'), 'wordContent/milk|n'), c))
+    await assertFails(setDoc(doc(as('t1'), 'wordContent/tea|n'), { ...c, junk: 1 }))
+    await setDoc(doc(as('o1'), 'config/ai'), { studentsUseKey: true })
+    await assertSucceeds(setDoc(doc(as('s1'), 'wordContent/milk|n'), c))
   })
 })

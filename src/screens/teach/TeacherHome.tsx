@@ -7,7 +7,7 @@ import { TeacherSection } from '../classes/Classes'
 export function TeacherHome({ openClass, openOwner }: { openClass: (code: string) => void; openOwner: () => void }) {
   const cloud = useCloudStatus()
   const { profile } = useProfile()
-  const name = profile?.teacherName || cloud.name || (cloud.email ?? '').split('@')[0]
+  const name = cloud.name || profile?.teacherName || (cloud.email ?? '').split('@')[0]
 
   return (
     <Screen>
