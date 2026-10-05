@@ -1,0 +1,1 @@
+var e=[`A1`,`A2`,`B1`,`B2`,`C1`];function t(t){return e.includes(t)}function n(t){return e.indexOf(t)}function r(e,t){return`${e.toLowerCase()}|${t.toLowerCase()}`}export{r as i,t as n,n as r,e as t};
