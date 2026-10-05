@@ -33,6 +33,12 @@ export function TeacherHome({ openClass, openOwner }: { openClass: (code: string
         </button>
       )}
 
+      {profile?.teacher && !profile.owner && profile.teacherExpiresAt !== null && (
+        <p className="mb-4 rounded-xl bg-slate-100 p-3 text-sm text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+          صلاحيتك كمعلم حتى {new Date(profile.teacherExpiresAt).toLocaleDateString('ar', { day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      )}
+
       <TeacherSection defaultName={name} openClass={openClass} />
 
       <p className="mt-4 text-center text-sm text-slate-500">

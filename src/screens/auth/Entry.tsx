@@ -7,7 +7,7 @@ import { Icon, type IconName } from '../../components/TabBar'
 import { Button } from '../../components/ui'
 import { openAccount, useCloudStatus } from '../../data/cloud'
 import { joinClass } from '../../data/classroom'
-import { chooseRole, logout, redeemTeacherCode, refreshProfile, type Role } from '../../data/roles'
+import { chooseRole, logout, redeemTeacherCode, refreshProfile, useProfile, type Role } from '../../data/roles'
 import { normalizeCode, TEACHER_CODE_LENGTH } from '../../lib/classroom'
 import { cloudErrorText } from '../../lib/useAsync'
 
@@ -114,6 +114,7 @@ export function SignIn({ role }: { role: Role }) {
 /** حساب مسجّل اختار «معلم» ولم يُفعَّل بعد: يدخل رمز المعلم من المالك. */
 export function TeacherCode() {
   const cloud = useCloudStatus()
+  const { profile } = useProfile()
   const [code, setCode] = useState('')
   const [name, setName] = useState(cloud.name ?? '')
   const [busy, setBusy] = useState(false)
@@ -135,7 +136,20 @@ export function TeacherCode() {
   }
 
   return (
-    <EntryLayout title="تفعيل حساب المعلم" subtitle="أدخل الرمز الذي أعطاك إياه مالك الموقع. يُستخدم مرة واحدة." onBack={() => chooseRole('student')}>
+    <EntryLayout
+      title={profile?.teacherExpired ? 'انتهت صلاحية المعلم' : 'تفعيل حساب المعلم'}
+      subtitle={
+        profile?.teacherExpired
+          ? 'فصولك وطلابك محفوظون. اطلب من مالك الموقع تمديد المدة، أو أدخل رمزًا جديدًا.'
+          : 'أدخل الرمز الذي أعطاك إياه مالك الموقع. الرمز خاص بك وحدك.'
+      }
+      onBack={() => chooseRole('student')}
+    >
+      {profile?.teacherExpired && (
+        <Button variant="secondary" className="mb-4 w-full" onClick={() => void refreshProfile()}>
+          مدّد المالك المدة؟ تحقّق الآن
+        </Button>
+      )}
       <form onSubmit={submit} className="grid gap-3">
         <label className="grid gap-1">
           <span className="text-sm font-medium">رمز المعلم</span>

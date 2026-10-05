@@ -22,6 +22,23 @@ export interface ClassInfo {
   teacherUid: string
   teacherName: string
   createdAt?: number
+  /** عدد الطلاب (يُحسب للمعلم فقط). */
+  students?: number
+}
+
+/** يضيف عدد طلاب كل فصل (استعلام عدّ، بلا قراءة بيانات الطلاب). */
+export async function withStudentCounts(classes: ClassInfo[]): Promise<ClassInfo[]> {
+  const { db, fs } = await cloudSdk()
+  return Promise.all(
+    classes.map(async (c) => {
+      try {
+        const snap = await fs.getCountFromServer(fs.collection(db, 'classes', c.code, 'members'))
+        return { ...c, students: snap.data().count }
+      } catch {
+        return c
+      }
+    }),
+  )
 }
 
 // ——— المدرس ———
@@ -43,9 +60,9 @@ export async function createClass(name: string, teacherName: string): Promise<Cl
 export async function myTeacherClasses(): Promise<ClassInfo[]> {
   const { db, fs, uid } = await cloudSdk()
   const snap = await fs.getDocs(fs.query(fs.collection(db, 'classes'), fs.where('teacherUid', '==', uid)))
-  return snap.docs
-    .map((d) => ({ code: d.id, ...(d.data() as Omit<ClassInfo, 'code'>) }))
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+  return withStudentCounts(
+    snap.docs.map((d) => ({ code: d.id, ...(d.data() as Omit<ClassInfo, 'code'>) })).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
+  )
 }
 
 export async function deleteClass(code: string): Promise<void> {

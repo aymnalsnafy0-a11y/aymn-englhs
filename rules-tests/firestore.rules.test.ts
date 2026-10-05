@@ -3,7 +3,7 @@
  *   npm run test:rules
  */
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 
@@ -28,7 +28,10 @@ beforeEach(async () => {
     await setDoc(doc(db, 'owners/o1'), { role: 'owner' })
     await setDoc(doc(db, 'teachers/t1'), { name: 'أ. أيمن' })
     await setDoc(doc(db, 'teachers/t2'), { name: 'أ. سالم' })
-    await setDoc(doc(db, 'teacherInvites/FREE2345'), { label: 'معلم جديد', usedBy: null })
+    await setDoc(doc(db, 'teacherInvites/FREE2345'), { label: 'معلم جديد', usedBy: null, days: 0 })
+    await setDoc(doc(db, 'teacherInvites/MNTH2345'), { label: 'شهر', usedBy: null, days: 30 })
+    await setDoc(doc(db, 'teachers/old1'), { name: 'منتهي', expiresAt: Timestamp.fromMillis(Date.now() - 864e5) })
+    await setDoc(doc(db, 'classes/OLD111'), { name: 'فصل المنتهي', teacherUid: 'old1' })
     await setDoc(doc(db, 'teacherInvites/USED2345'), { label: 'مستخدم', usedBy: 't2' })
     await setDoc(doc(db, 'classes/ABC123'), { name: 'فصل أ', teacherUid: 't1', teacherName: 'أ. أيمن' })
     await setDoc(doc(db, 'classes/ABC123/members/s1'), { name: 'سارة' })
@@ -48,10 +51,11 @@ describe('private learner data', () => {
   })
 })
 
-const redeem = (uid: string, code: string) => {
+const days = (n: number) => Timestamp.fromMillis(Date.now() + n * 864e5)
+const redeem = (uid: string, code: string, expiresAt: Timestamp | null = null) => {
   const db = as(uid)
   const batch = writeBatch(db)
-  batch.set(doc(db, `teachers/${uid}`), { name: 'معلم', invite: code })
+  batch.set(doc(db, `teachers/${uid}`), { name: 'معلم', invite: code, expiresAt })
   batch.update(doc(db, `teacherInvites/${code}`), { usedBy: uid, usedName: 'معلم', usedAt: 1 })
   return batch.commit()
 }
@@ -64,8 +68,9 @@ describe('roles', () => {
   })
 
   it('only the owner creates and lists teacher codes', async () => {
-    await assertSucceeds(setDoc(doc(as('o1'), 'teacherInvites/NEWC2345'), { label: 'x', usedBy: null }))
-    await assertFails(setDoc(doc(as('t1'), 'teacherInvites/NEWD2345'), { label: 'x', usedBy: null }))
+    await assertSucceeds(setDoc(doc(as('o1'), 'teacherInvites/NEWC2345'), { label: 'x', usedBy: null, days: 60 }))
+    await assertFails(setDoc(doc(as('o1'), 'teacherInvites/NEWE2345'), { label: 'x', usedBy: null }))
+    await assertFails(setDoc(doc(as('t1'), 'teacherInvites/NEWD2345'), { label: 'x', usedBy: null, days: 0 }))
     await assertSucceeds(getDocs(collection(as('o1'), 'teacherInvites')))
     await assertFails(getDocs(collection(as('t1'), 'teacherInvites')))
     await assertSucceeds(getDoc(doc(as('s9'), 'teacherInvites/FREE2345')))
@@ -76,6 +81,26 @@ describe('roles', () => {
     await assertFails(redeem('n2', 'FREE2345'))
     await assertFails(redeem('n3', 'USED2345'))
     await assertFails(redeem('n4', 'NOPE2345'))
+  })
+
+  it('a timed code cannot grant more time than the owner set', async () => {
+    await assertFails(redeem('m1', 'MNTH2345', null))
+    await assertFails(redeem('m1', 'MNTH2345', days(90)))
+    await assertSucceeds(redeem('m1', 'MNTH2345', days(30)))
+  })
+
+  it('a teacher cannot extend their own time; the owner can', async () => {
+    await assertFails(updateDoc(doc(as('old1'), 'teachers/old1'), { expiresAt: days(365) }))
+    await assertSucceeds(updateDoc(doc(as('old1'), 'teachers/old1'), { name: 'اسم جديد' }))
+    await assertSucceeds(updateDoc(doc(as('o1'), 'teachers/old1'), { expiresAt: days(30) }))
+    await assertSucceeds(getDocs(collection(as('old1'), 'classes/OLD111/members')))
+  })
+
+  it('an expired teacher loses their classes and cannot create new ones, until renewed with a new code', async () => {
+    await assertFails(getDocs(collection(as('old1'), 'classes/OLD111/members')))
+    await assertFails(setDoc(doc(as('old1'), 'classes/NEW777'), { name: 'x', teacherUid: 'old1' }))
+    await assertSucceeds(redeem('old1', 'MNTH2345', days(30)))
+    await assertSucceeds(getDocs(collection(as('old1'), 'classes/OLD111/members')))
   })
 
   it('becoming a teacher without a code, or marking a code without becoming a teacher, fails', async () => {

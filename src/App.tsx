@@ -67,7 +67,7 @@ const STAFF_LEARN_TABS: Tab[] = [
   { id: 'settings', label: 'الإعدادات', icon: 'gear' },
 ]
 const TEACH_TABS: Tab[] = [
-  { id: 'home', label: 'فصولي', icon: 'class' },
+  { id: 'home', label: 'الطلاب', icon: 'class' },
   { id: 'learn', label: 'تعلّمي', icon: 'book' },
   { id: 'settings', label: 'الإعدادات', icon: 'gear' },
 ]

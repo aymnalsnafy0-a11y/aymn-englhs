@@ -136,13 +136,14 @@ export function TeacherSection({ defaultName, openClass }: { defaultName: string
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">فصولي</h2>
+      <h2 className="text-lg font-bold">طلابي</h2>
+      <p className="text-sm text-slate-500">طلابك مقسّمون حسب الفصل. اضغط على الفصل لترى طلابه ونتائجهم.</p>
       {classes.loading ? (
         <p className="mt-2 text-sm text-slate-500">جارٍ التحميل…</p>
       ) : classes.error ? (
         <p className="mt-2 text-sm text-rose-700 dark:text-rose-400">{cloudErrorText(classes.error)}</p>
       ) : classes.data!.length === 0 ? (
-        <p className="mt-1 text-sm text-slate-500">أنشئ فصلًا، وأعطِ طلابك رمزه لينضموا.</p>
+        <p className="mt-2 text-sm text-slate-500">لا يوجد طلاب بعد. أنشئ فصلًا، وأعطِ طلابك رمزه لينضموا.</p>
       ) : (
         <ul className="mt-2 grid gap-2">
           {classes.data!.map((c) => (
@@ -152,7 +153,12 @@ export function TeacherSection({ defaultName, openClass }: { defaultName: string
                 onClick={() => openClass(c.code)}
                 className="flex w-full items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 text-start hover:bg-slate-100 dark:bg-slate-800/60 dark:hover:bg-slate-800"
               >
-                <span className="font-semibold">{c.name}</span>
+                <span className="min-w-0">
+                  <span className="block font-semibold">{c.name}</span>
+                  <span className="block text-sm text-slate-500">
+                    {c.students === undefined ? '' : c.students === 0 ? 'لا يوجد طلاب بعد' : `${c.students} طالب`}
+                  </span>
+                </span>
                 <span dir="ltr" className="font-en tracking-widest text-slate-500">
                   {formatCode(c.code)}
                 </span>
@@ -161,7 +167,8 @@ export function TeacherSection({ defaultName, openClass }: { defaultName: string
           ))}
         </ul>
       )}
-      <form onSubmit={create} className="mt-4 grid gap-2 border-t border-slate-100 pt-4 sm:grid-cols-[1fr_1fr_auto] dark:border-slate-800">
+      <h3 className="mt-4 border-t border-slate-100 pt-4 font-semibold dark:border-slate-800">فصل جديد</h3>
+      <form onSubmit={create} className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
         <input className={input} aria-label="اسم الفصل" placeholder="اسم الفصل (مثل: مجموعة الأحد)" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
         <input className={input} aria-label="اسمك كمدرس" placeholder="اسمك كمدرس" value={teacherName} onChange={(e) => setTeacherName(e.target.value)} maxLength={40} />
         <Button type="submit" disabled={busy || !name.trim()}>

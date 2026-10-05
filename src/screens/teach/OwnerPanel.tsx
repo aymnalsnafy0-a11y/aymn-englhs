@@ -1,6 +1,17 @@
 import { useState } from 'react'
 import { Button, Card, Screen } from '../../components/ui'
-import { allClasses, createTeacherInvite, deleteTeacherInvite, listTeacherInvites, listTeachers, revokeTeacher } from '../../data/roles'
+import {
+  allClasses,
+  createTeacherInvite,
+  deleteTeacherInvite,
+  DURATIONS,
+  durationLabel,
+  extendTeacher,
+  listTeacherInvites,
+  listTeachers,
+  revokeTeacher,
+  type Teacher,
+} from '../../data/roles'
 import { formatCode } from '../../lib/classroom'
 import { cloudErrorText, useAsync } from '../../lib/useAsync'
 
@@ -8,8 +19,25 @@ const input =
   'min-w-0 flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-slate-300 focus:ring-2 focus:ring-teal-600 focus:outline-none dark:bg-slate-950 dark:ring-slate-700'
 
 function inviteText(code: string) {
-  return `تمت دعوتك كمعلم في موقع سياق لتعلّم الإنجليزية:\n${location.origin}${import.meta.env.BASE_URL}\nاختر «أنا معلم» ← سجّل الدخول ← رمز المعلم: ${formatCode(code)}\n(الرمز لك وحدك ويُستخدم مرة واحدة)`
+  return `تمت دعوتك كمعلم في موقع سياق لتعلّم الإنجليزية:\n${location.origin}${import.meta.env.BASE_URL}\nاختر «أنا معلم» ← سجّل الدخول ← رمز المعلم: ${formatCode(code)}\n(الرمز لك وحدك ويرتبط بحسابك)`
 }
+
+const dateText = (ms: number) => new Date(ms).toLocaleDateString('ar', { day: 'numeric', month: 'long', year: 'numeric' })
+
+/** حالة صلاحية المعلم: بلا انتهاء، تنتهي في تاريخ، أو منتهية. */
+function Expiry({ t }: { t: Teacher }) {
+  if (t.expiresAt === null) return <span className="text-teal-700 dark:text-teal-400">بلا انتهاء</span>
+  const left = Math.ceil((t.expiresAt - Date.now()) / 864e5)
+  if (left <= 0) return <span className="font-semibold text-rose-700 dark:text-rose-400">انتهت ({dateText(t.expiresAt)})</span>
+  return (
+    <span className={left <= 7 ? 'font-semibold text-amber-700 dark:text-amber-400' : ''}>
+      تنتهي {dateText(t.expiresAt)} · باقي {left} يوم
+    </span>
+  )
+}
+
+const select =
+  'rounded-xl bg-white px-3 py-2 ring-1 ring-slate-300 focus:ring-2 focus:ring-teal-600 focus:outline-none dark:bg-slate-950 dark:ring-slate-700'
 
 function Share({ code }: { code: string }) {
   const [copied, setCopied] = useState(false)
@@ -49,6 +77,7 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
     return { invites, teachers, classes }
   }, [])
   const [label, setLabel] = useState('')
+  const [days, setDays] = useState(30)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [fresh, setFresh] = useState<string | null>(null)
@@ -58,7 +87,7 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
     setBusy(true)
     setMsg(null)
     try {
-      setFresh(await createTeacherInvite(label))
+      setFresh(await createTeacherInvite(label, days))
       setLabel('')
       data.reload()
     } catch (err) {
@@ -86,7 +115,7 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
           {[
             { n: d.teachers.length, label: 'معلم' },
             { n: d.classes.length, label: 'فصل' },
-            { n: unused.length, label: 'رمز غير مستخدم' },
+            { n: unused.length, label: 'رمز لم يُفعَّل' },
           ].map((s) => (
             <Card key={s.label} className="p-3">
               <p className="text-3xl font-bold tabular-nums text-teal-700 dark:text-teal-400">{s.n}</p>
@@ -98,9 +127,18 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
 
       <Card className="mb-4">
         <h2 className="text-lg font-bold">رمز دخول لمعلم جديد</h2>
-        <p className="mt-1 text-sm text-slate-500">كل رمز لمعلم واحد ويُستخدم مرة واحدة. أرسله له، فيختار «أنا معلم» ويدخله.</p>
+        <p className="mt-1 text-sm text-slate-500">
+          كل رمز لمعلم واحد: أول حساب يدخله يصبح صاحبه، ولا يعمل لغيره. المدة تبدأ من يوم التفعيل، وتقدر تمددها لاحقًا.
+        </p>
         <form onSubmit={create} className="mt-3 flex flex-wrap gap-2">
           <input className={input} aria-label="اسم المعلم (لتتذكر لمن الرمز)" placeholder="لمن الرمز؟ (مثل: أ. سالم)" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={40} />
+          <select className={select} aria-label="مدة الصلاحية" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+            {DURATIONS.map((d) => (
+              <option key={d.days} value={d.days}>
+                {d.label}
+              </option>
+            ))}
+          </select>
           <Button type="submit" disabled={busy}>
             {busy ? '…' : 'أنشئ رمزًا'}
           </Button>
@@ -123,10 +161,12 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
                   <span dir="ltr" className="font-en font-semibold tracking-widest">
                     {formatCode(i.code)}
                   </span>
-                  <span className="ms-2 text-slate-500">{i.label || '—'}</span>
+                  <span className="ms-2 text-slate-500">
+                    {i.label || '—'} · {durationLabel(i.days)}
+                  </span>
                 </span>
                 {i.usedBy ? (
-                  <span className="text-teal-700 dark:text-teal-400">✓ استخدمه {i.usedName || 'معلم'}</span>
+                  <span className="text-teal-700 dark:text-teal-400">✓ مرتبط بـ{i.usedName || 'معلم'}</span>
                 ) : (
                   <span className="flex items-center gap-1">
                     <Share code={i.code} />
@@ -159,24 +199,50 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
         ) : (
           <ul className="mt-2 grid gap-1 text-sm">
             {d.teachers.map((t) => (
-              <li key={t.uid} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 odd:bg-slate-50 dark:odd:bg-slate-800/50">
-                <span className="min-w-0">
-                  <span className="block font-semibold">{t.name}</span>
-                  <span className="block text-xs text-slate-500">
-                    <span dir="ltr">{t.email}</span> · {classesBy(t.uid)} فصل
+              <li key={t.uid} className="rounded-lg px-2 py-2 odd:bg-slate-50 dark:odd:bg-slate-800/50">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{t.name}</span>
+                    <span className="block text-xs text-slate-500">
+                      <span dir="ltr">{t.email}</span> · {classesBy(t.uid)} فصل
+                    </span>
                   </span>
-                </span>
-                <Button
-                  variant="ghost"
-                  className="min-h-9 px-2 text-sm text-rose-700 dark:text-rose-400"
-                  onClick={async () => {
-                    if (!window.confirm(`سحب صلاحية المعلم من ${t.name}؟ لن يستطيع إدارة فصوله.`)) return
-                    await revokeTeacher(t.uid)
-                    data.reload()
-                  }}
-                >
-                  سحب الصلاحية
-                </Button>
+                  <Button
+                    variant="ghost"
+                    className="min-h-9 px-2 text-sm text-rose-700 dark:text-rose-400"
+                    onClick={async () => {
+                      if (!window.confirm(`سحب صلاحية المعلم من ${t.name}؟ لن يستطيع إدارة فصوله.`)) return
+                      await revokeTeacher(t.uid)
+                      data.reload()
+                    }}
+                  >
+                    سحب الصلاحية
+                  </Button>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <Expiry t={t} />
+                  <select
+                    className={`${select} py-1 text-xs`}
+                    aria-label={`تمديد صلاحية ${t.name}`}
+                    value=""
+                    onChange={async (e) => {
+                      const add = Number(e.target.value)
+                      const label = durationLabel(add)
+                      if (!window.confirm(add ? `تمديد صلاحية ${t.name} ${label}؟` : `جعل صلاحية ${t.name} بلا انتهاء؟`)) return
+                      await extendTeacher(t, add)
+                      data.reload()
+                    }}
+                  >
+                    <option value="" disabled>
+                      تمديد…
+                    </option>
+                    {DURATIONS.map((d) => (
+                      <option key={d.days} value={d.days}>
+                        {d.days ? `+ ${d.label}` : d.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </li>
             ))}
           </ul>
@@ -200,7 +266,10 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
                 >
                   <span className="min-w-0">
                     <span className="block font-semibold">{c.name}</span>
-                    <span className="block text-sm text-slate-500">المعلم: {c.teacherName || '—'}</span>
+                    <span className="block text-sm text-slate-500">
+                      المعلم: {c.teacherName || '—'}
+                      {c.students !== undefined && ` · ${c.students} طالب`}
+                    </span>
                   </span>
                   <span dir="ltr" className="font-en tracking-widest text-slate-500">
                     {formatCode(c.code)}
