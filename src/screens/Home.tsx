@@ -95,7 +95,7 @@ export function Home({
     <Screen>
       <header className="mb-5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-teal-700 dark:text-teal-400">سياق</span>
+          <span className="text-2xl font-bold text-teal-700 dark:text-teal-400">سنافي AE</span>
           <LevelBadge level={settings.startLevel!} />
         </div>
         {streak && streak.current > 0 && (

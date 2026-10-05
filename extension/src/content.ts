@@ -1,5 +1,5 @@
 /**
- * يعمل في كل المواقع (عدا تطبيق سياق):
+ * يعمل في كل المواقع (عدا تطبيق سنافي AE):
  * - المواقع الإنجليزية: يظلل كلمات المتعلم (قيد التعلّم بلون، المحفوظة بخط) مع المعنى عند التمرير،
  *   ويحسب نسبة فهم الصفحة.
  * - المواقع العربية: يستبدل معاني كلمات المتعلم بكلماتها الإنجليزية (الأصل يظهر عند التمرير).
@@ -77,7 +77,7 @@ function processEnglish(node: Text, tokens: TokenInfo[]) {
     span.setAttribute(MARK, hit.s === 'l' ? 'learning' : 'mastered')
     span.className = hit.s === 'l' ? 'siyaq-learning' : 'siyaq-mastered'
     span.textContent = m[0]
-    span.title = `${hit.w}${hit.ar ? ` — ${hit.ar}` : ''} · سياق`
+    span.title = `${hit.w}${hit.ar ? ` — ${hit.ar}` : ''} · سنافي AE`
     parts.push(span)
     last = m.index! + m[0].length
     changed = true
@@ -102,7 +102,7 @@ function processArabic(node: Text) {
     span.dir = 'ltr'
     span.lang = 'en'
     span.textContent = m.en
-    span.title = `${text.slice(m.start, m.end)} · سياق`
+    span.title = `${text.slice(m.start, m.end)} · سنافي AE`
     span.dataset.original = text.slice(m.start, m.end)
     parts.push(span)
     last = m.end

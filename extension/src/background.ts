@@ -1,8 +1,8 @@
-/** عامل الخلفية: قائمة «أضف إلى خطة سياق» عند تحديد كلمة. */
+/** عامل الخلفية: قائمة «أضف إلى خطة سنافي AE» عند تحديد كلمة. */
 import { saveWord, updateBadge } from './storage'
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.create({ id: 'siyaq-save', title: 'أضف «%s» إلى خطة سياق', contexts: ['selection'] })
+  chrome.contextMenus.create({ id: 'siyaq-save', title: 'أضف «%s» إلى خطة سنافي AE', contexts: ['selection'] })
   void updateBadge()
 })
 

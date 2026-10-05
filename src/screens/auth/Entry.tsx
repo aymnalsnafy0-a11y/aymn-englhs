@@ -75,7 +75,7 @@ export function Splash({ text = 'جارٍ التحميل…' }: { text?: string 
   return (
     <div className="flex min-h-screen min-h-dvh flex-col items-center justify-center gap-4 bg-gradient-to-b from-teal-700 to-teal-950 text-white">
       <Logo />
-      <p className="text-2xl font-bold">سياق</p>
+      <p className="text-2xl font-bold">سنافي AE</p>
       <p aria-live="polite" className="text-sm text-teal-100">
         {text}
       </p>
@@ -85,7 +85,7 @@ export function Splash({ text = 'جارٍ التحميل…' }: { text?: string 
 
 export function Welcome() {
   return (
-    <EntryLayout title="سياق" subtitle="تعلّم أهم 5000 كلمة إنجليزية بالسياق — خطوة بخطوة، كل يوم.">
+    <EntryLayout title="سنافي AE" subtitle="تعلّم أهم 5000 كلمة إنجليزية بالسياق — خطوة بخطوة، كل يوم.">
       <h2 className="mb-4 text-center text-lg font-bold">كيف ستدخل؟</h2>
       <div className="grid gap-3">
         <RoleTile icon="class" title="أنا طالب" detail="أتعلّم وأحلّ واجبات معلمي — تحتاج رمز الفصل من معلمك" onClick={() => chooseRole('student')} />

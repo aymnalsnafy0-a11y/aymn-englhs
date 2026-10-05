@@ -84,8 +84,8 @@ export default defineConfig(({ mode }) => ({
       disable: mode === 'artifact',
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'سياق — كلمات أكسفورد 5000',
-        short_name: 'سياق',
+        name: 'سنافي AE — كلمات أكسفورد 5000',
+        short_name: 'سنافي AE',
         description: 'تعلّم كلمات أكسفورد 5000 بالترتيب حسب المستوى',
         lang: 'ar',
         dir: 'rtl',

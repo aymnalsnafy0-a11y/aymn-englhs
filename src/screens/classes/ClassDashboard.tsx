@@ -55,7 +55,7 @@ export function ClassDashboard({
     )
   }
   const { info, members, assignments, results } = data.data
-  const invite = `انضم لفصل «${info.name}» في موقع سياق لتعلّم الإنجليزية:\n${location.origin}${import.meta.env.BASE_URL}\nالإعدادات ← سجّل الدخول ← الفصول ← رمز الفصل: ${formatCode(code)}`
+  const invite = `انضم لفصل «${info.name}» في موقع سنافي AE لتعلّم الإنجليزية:\n${location.origin}${import.meta.env.BASE_URL}\nاختر «أنا طالب» ← سجّل الدخول ← رمز الفصل: ${formatCode(code)}`
 
   return (
     <Screen title={info.name} onBack={onBack}>

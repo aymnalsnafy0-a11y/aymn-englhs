@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "سياق — مساعد التصفح",
-  "short_name": "سياق",
+  "name": "سنافي AE — مساعد التصفح",
+  "short_name": "سنافي AE",
   "version": "0.1.0",
-  "description": "يظلل كلماتك في المواقع الإنجليزية، ويستبدل كلمات في المواقع العربية حسب مستواك، ويحفظ كلمات جديدة لخطتك في سياق.",
+  "description": "يظلل كلماتك في المواقع الإنجليزية، ويستبدل كلمات في المواقع العربية حسب مستواك، ويحفظ كلمات جديدة لخطتك في سنافي AE.",
   "default_locale": "ar",
   "icons": { "128": "icon-128.png" },
-  "action": { "default_popup": "popup.html", "default_title": "سياق", "default_icon": { "128": "icon-128.png" } },
+  "action": { "default_popup": "popup.html", "default_title": "سنافي AE", "default_icon": { "128": "icon-128.png" } },
   "background": { "service_worker": "background.js" },
   "permissions": ["storage", "contextMenus"],
   "content_scripts": [

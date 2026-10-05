@@ -30,7 +30,7 @@ const input =
   'min-w-0 flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-slate-300 focus:ring-2 focus:ring-teal-600 focus:outline-none dark:bg-slate-950 dark:ring-slate-700'
 
 function inviteText(code: string) {
-  return `تمت دعوتك كمعلم في موقع سياق لتعلّم الإنجليزية:\n${location.origin}${import.meta.env.BASE_URL}\nاختر «أنا معلم» ← سجّل الدخول ← رمز المعلم: ${formatCode(code)}\n(الرمز لك وحدك ويرتبط بحسابك)`
+  return `تمت دعوتك كمعلم في موقع سنافي AE لتعلّم الإنجليزية:\n${location.origin}${import.meta.env.BASE_URL}\nاختر «أنا معلم» ← سجّل الدخول ← رمز المعلم: ${formatCode(code)}\n(الرمز لك وحدك ويرتبط بحسابك)`
 }
 
 const dateText = (ms: number) => new Date(ms).toLocaleDateString('ar', { day: 'numeric', month: 'long', year: 'numeric' })
