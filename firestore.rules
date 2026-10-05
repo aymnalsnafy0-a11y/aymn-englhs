@@ -7,6 +7,9 @@ rules_version = '2';
 // - config: إعدادات يشاركها المالك (قائمة الكلمات للجميع، والسماح للطلاب بالمفتاح).
 // - secrets/gemini: مفتاح المالك المشترك — للمالك وللمعلمين المسموح لهم (وللطلاب إن سمح المالك).
 // - wordContent: مكتبة شرح الكلمات المشتركة — يقرؤها كل مسجّل، ويكتبها من يملك مفتاحًا.
+// - studentCodes: رموز دخول الطلاب — ينشئها المعلم باسم الطالب (وفصول اختيارية)، وأول حساب يدخلها يصبح صاحبها.
+// - studentNotes: ملاحظات المعلم الخاصة عن الطالب — للمعلم والمالك فقط.
+// - students: سجل الطالب المرتبط بمعلمه (والفصول وملخص التقدّم) — للطالب ومعلمه والمالك.
 // - learners: بيانات كل متعلم الخاصة — صاحبها فقط.
 // - classes: فصول المعلمين. الرمز هو معرّف الفصل (يُعطى للطلاب). للفصل معلم رئيسي ومعلمون مشاركون.
 //   الطالب يرى واجبات فصله ونتيجته فقط؛ المعلم يرى طلاب فصوله ونتائجهم؛ المالك يرى كل شيء.
@@ -52,6 +55,14 @@ service cloud.firestore {
         && (days == 0
           ? data.get('expiresAt', null) == null
           : (data.expiresAt is timestamp && data.expiresAt <= request.time + duration.value(days + 1, 'd')));
+    }
+    // ربط الطالب برمز: الرمز غير مستخدم، ويُعلَّم في نفس الدفعة باسم هذا الحساب، والمعلم هو صاحب الرمز.
+    function studentCodeOk(data) {
+      let c = /databases/$(database)/documents/studentCodes/$(data.code);
+      return data.code is string
+        && get(c).data.usedBy == null
+        && getAfter(c).data.usedBy == request.auth.uid
+        && data.teacherUid == get(c).data.teacherUid;
     }
     function validName(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() <= 40;
@@ -103,6 +114,45 @@ service cloud.firestore {
         && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']) || inviteOk(request.resource.data)));
     }
 
+    match /studentCodes/{code} {
+      allow get: if signedIn();
+      allow list: if isOwner() || (signedIn() && resource.data.teacherUid == request.auth.uid);
+      allow create: if (isOwner() || (isStaff() && request.resource.data.teacherUid == request.auth.uid))
+        && request.resource.data.usedBy == null && validName(request.resource.data);
+      // المعلم يعدّل الاسم والفصول؛ الطالب يربط الرمز بحسابه مرة واحدة.
+      allow update: if isOwner()
+        || (isStaff() && resource.data.teacherUid == request.auth.uid
+          && request.resource.data.teacherUid == resource.data.teacherUid
+          && request.resource.data.usedBy == resource.data.usedBy)
+        || (signedIn() && resource.data.usedBy == null
+          && request.resource.data.usedBy == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedBy', 'usedAt'])
+          && getAfter(/databases/$(database)/documents/students/$(request.auth.uid)).data.code == code);
+      allow delete: if isOwner() || (isStaff() && resource.data.teacherUid == request.auth.uid);
+    }
+
+    match /studentNotes/{code} {
+      allow read, write: if isOwner()
+        || (isStaff() && get(/databases/$(database)/documents/studentCodes/$(code)).data.teacherUid == request.auth.uid);
+    }
+
+    match /students/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isOwner()
+        || (isStaff() && resource.data.teacherUid == request.auth.uid));
+      allow list: if isOwner() || (isStaff() && resource.data.teacherUid == request.auth.uid);
+      allow create: if signedIn() && request.auth.uid == uid && validName(request.resource.data)
+        && studentCodeOk(request.resource.data);
+      // الطالب: اسمه وملخص تقدّمه وفصوله، أو الارتباط بمعلم آخر برمز جديد.
+      // معلمه: الاسم والفصول فقط. المالك: كل شيء.
+      allow update: if isOwner()
+        || (signedIn() && request.auth.uid == uid && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'lastSeen', 'known', 'learning', 'streak', 'classes'])
+          || studentCodeOk(request.resource.data)))
+        || (isStaff() && resource.data.teacherUid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'classes']));
+      allow delete: if isOwner() || (isStaff() && resource.data.teacherUid == request.auth.uid);
+    }
+
     match /learners/{uid}/state/{doc} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
@@ -127,8 +177,8 @@ service cloud.firestore {
       allow get: if signedIn();
       allow list: if isOwner() || (signedIn()
         && (resource.data.teacherUid == request.auth.uid || request.auth.uid in resource.data.get('teachers', [])));
-      allow create: if isStaff()
-        && request.resource.data.teacherUid == request.auth.uid
+      // المعلم ينشئ فصوله، والمالك ينشئ فصلًا لأي معلم.
+      allow create: if (isOwner() || (isStaff() && request.resource.data.teacherUid == request.auth.uid))
         && request.resource.data.get('teachers', []).size() == 0
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 60;
@@ -140,10 +190,22 @@ service cloud.firestore {
 
       match /members/{uid} {
         allow read: if signedIn() && (request.auth.uid == uid || isTeacher());
-        allow create, update: if signedIn() && request.auth.uid == uid
+        // ينضم الطالب بنفسه برمز الفصل، أو يضيفه المعلم من قائمة طلابه.
+        allow create: if (signedIn() && request.auth.uid == uid || isTeacher())
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 40;
+        allow update: if signedIn() && request.auth.uid == uid
           && request.resource.data.name is string
           && request.resource.data.name.size() <= 40;
         allow delete: if signedIn() && (request.auth.uid == uid || isTeacher());
+      }
+
+      // إعلانات الفصل: يكتبها المعلم ويقرؤها طلابه.
+      match /announcements/{id} {
+        allow read: if isTeacher() || isMember();
+        allow create: if isTeacher() && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000;
+        allow delete: if isTeacher();
       }
 
       match /assignments/{aid} {

@@ -6,7 +6,7 @@ import { AccountCard } from '../../components/AccountCard'
 import { Icon, type IconName } from '../../components/TabBar'
 import { Button } from '../../components/ui'
 import { openAccount, useCloudStatus } from '../../data/cloud'
-import { joinClass } from '../../data/classroom'
+import { redeemStudentCode } from '../../data/roster'
 import { chooseRole, logout, redeemTeacherCode, refreshProfile, useProfile, type Role } from '../../data/roles'
 import { normalizeCode, TEACHER_CODE_LENGTH } from '../../lib/classroom'
 import { chromeIntent, inAppBrowser, isAndroid } from '../../lib/browser'
@@ -272,22 +272,20 @@ function OwnerSetup() {
   )
 }
 
-/** طالب جديد بلا فصل: يدخل رمز الفصل من معلمه. */
-export function JoinFirstClass() {
-  const cloud = useCloudStatus()
+/** طالب جديد: يدخل رمز الطالب من معلمه، فيرتبط به ويدخل فصوله. */
+export function StudentCodeScreen() {
   const [code, setCode] = useState('')
-  const [name, setName] = useState(cloud.name ?? '')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    const c = normalizeCode(code)
-    if (!c) return setMsg('رمز الفصل 6 خانات، مثل ABC-234.')
+    const c = normalizeCode(code, TEACHER_CODE_LENGTH)
+    if (!c) return setMsg('رمز الطالب 8 خانات، مثل ABCD-2345.')
     setBusy(true)
     setMsg(null)
     try {
-      await joinClass(c, name)
+      await redeemStudentCode(c)
       await refreshProfile()
     } catch (err) {
       setMsg(cloudErrorText(err))
@@ -296,26 +294,22 @@ export function JoinFirstClass() {
   }
 
   return (
-    <EntryLayout title="انضم لفصلك" subtitle="أدخل رمز الفصل الذي أعطاك إياه معلمك." onBack={() => chooseRole(null)}>
+    <EntryLayout title="رمز الطالب" subtitle="أدخل الرمز الذي أعطاك إياه معلمك — تدخل فصولك وتشوف دروسه وواجباته." onBack={() => chooseRole(null)}>
       <form onSubmit={submit} className="grid gap-3">
         <label className="grid gap-1">
-          <span className="text-sm font-medium">رمز الفصل</span>
+          <span className="text-sm font-medium">رمز الطالب</span>
           <input
             className={`${input} font-en text-center tracking-[0.3em]`}
             dir="ltr"
-            placeholder="ABC-234"
+            placeholder="ABCD-2345"
             value={code}
             onChange={(e) => setCode(e.target.value)}
             autoCapitalize="characters"
             autoComplete="off"
           />
         </label>
-        <label className="grid gap-1">
-          <span className="text-sm font-medium">اسمك كما يراه المعلم</span>
-          <input className={input} placeholder="الاسم الكامل" value={name} onChange={(e) => setName(e.target.value)} maxLength={40} />
-        </label>
-        <Button type="submit" className="mt-1 min-h-12 text-lg" disabled={busy || !code.trim() || !name.trim()}>
-          {busy ? 'جارٍ الانضمام…' : 'ادخل الفصل'}
+        <Button type="submit" className="mt-1 min-h-12 text-lg" disabled={busy || !code.trim()}>
+          {busy ? 'جارٍ الدخول…' : 'ادخل'}
         </Button>
         {msg && (
           <p aria-live="polite" className="text-center text-sm text-rose-700 dark:text-rose-400">
@@ -323,7 +317,8 @@ export function JoinFirstClass() {
           </p>
         )}
       </form>
-      <button type="button" onClick={() => chooseRole('teacher')} className="mt-6 block w-full text-center text-sm text-teal-700 underline dark:text-teal-400">
+      <p className="mt-4 text-center text-sm text-slate-500">ما عندك رمز؟ اطلبه من معلمك — كل طالب له رمز خاص.</p>
+      <button type="button" onClick={() => chooseRole('teacher')} className="mt-4 block w-full text-center text-sm text-teal-700 underline dark:text-teal-400">
         أنا معلم وعندي رمز معلم
       </button>
       <SignedInAs />

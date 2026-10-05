@@ -1,6 +1,21 @@
 import { useState } from 'react'
 import { Button, Card, ProgressBar, Screen } from '../../components/ui'
-import { deleteAssignment, deleteClass, getClass, listAssignments, listMembers, listResults, removeMember, type Assignment } from '../../data/classroom'
+import {
+  deleteAnnouncement,
+  deleteAssignment,
+  deleteClass,
+  getClass,
+  listAnnouncements,
+  listAssignments,
+  listMembers,
+  listResults,
+  postAnnouncement,
+  removeMember,
+  type Assignment,
+} from '../../data/classroom'
+import { useCloudStatus } from '../../data/cloud'
+import { useProfile } from '../../data/roles'
+import { addToClass, roster, type RosterEntry } from '../../data/roster'
 import { assignmentReport, attemptsLabel, formatCode, studentHomework, type AssignmentState, type Member, type Result } from '../../lib/classroom'
 import { toDayKey } from '../../lib/dates'
 import { exerciseLabel } from '../../lib/exercises'
@@ -25,18 +40,22 @@ export function ClassDashboard({
   code,
   onBack,
   newAssignment,
+  openStudent: openStudentPage,
 }: {
   code: string
   onBack: () => void
   newAssignment: () => void
+  openStudent: (studentCode: string) => void
 }) {
   const data = useAsync(async () => {
-    const [info, members, assignments] = await Promise.all([getClass(code), listMembers(code), listAssignments(code)])
+    const [info, members, assignments, news] = await Promise.all([getClass(code), listMembers(code), listAssignments(code), listAnnouncements(code).catch(() => [])])
     const lists = await Promise.all(assignments.map((a) => listResults(code, a.id).catch(() => [] as Result[])))
     const results: Record<string, Result[]> = Object.fromEntries(assignments.map((a, i) => [a.id, lists[i]]))
-    return { info, members, assignments, results }
+    // طلاب المعلم (لفتح صفحة الطالب وإضافة طلاب للفصل). المعلم المشارك لا يرى قائمة غيره.
+    const mine: RosterEntry[] = info ? await roster(info.teacherUid).catch(() => []) : []
+    return { info, members, assignments, results, news, mine }
   }, [code])
-  const [tab, setTab] = useState<'assignments' | 'students'>('assignments')
+  const [tab, setTab] = useState<'students' | 'assignments' | 'grades' | 'news'>('students')
   // «تحديث» يعيد تحميل نتائج كل واجب أيضًا (كل بطاقة تحمّل نتائجها بنفسها).
   const [version, setVersion] = useState(0)
   const refresh = () => {
@@ -54,7 +73,9 @@ export function ClassDashboard({
       </Screen>
     )
   }
-  const { info, members, assignments, results } = data.data
+  const { info, members, assignments, results, news, mine } = data.data
+  const entryOf = (uid: string) => mine.find((e) => e.student?.uid === uid)
+  const notIn = mine.filter((e) => !(e.student ? members.some((m) => m.uid === e.student!.uid) : e.code.classes.includes(code)))
   const invite = `انضم لفصل «${info.name}» في موقع سنافي AE لتعلّم الإنجليزية:\n${location.origin}${import.meta.env.BASE_URL}\nاختر «أنا طالب» ← سجّل الدخول ← رمز الفصل: ${formatCode(code)}`
 
   return (
@@ -100,18 +121,40 @@ export function ClassDashboard({
         </p>
       </Card>
 
-      <div className="mb-3 flex gap-2" role="tablist">
-        {(['assignments', 'students'] as const).map((t) => (
-          <Button key={t} role="tab" aria-selected={tab === t} variant={tab === t ? 'primary' : 'secondary'} onClick={() => setTab(t)}>
-            {t === 'assignments' ? 'الواجبات' : 'الطلاب'}
-          </Button>
-        ))}
-        <Button variant="ghost" className="ms-auto" onClick={refresh}>
+      <div className="mb-1 flex justify-end">
+        <Button variant="ghost" className="min-h-9 text-sm" onClick={refresh}>
           ↻ تحديث
         </Button>
       </div>
+      <div className="mb-3 grid grid-cols-4 gap-1 rounded-2xl bg-slate-100 p-1 dark:bg-slate-800" role="tablist">
+        {(
+          [
+            ['students', 'الطلاب'],
+            ['assignments', 'الواجبات'],
+            ['grades', 'الدرجات'],
+            ['news', 'الإعلانات'],
+          ] as const
+        ).map(([t, label]) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={`rounded-xl px-1 py-2 text-sm font-medium transition-colors ${
+              tab === t ? 'bg-white text-teal-800 shadow-sm dark:bg-slate-900 dark:text-teal-300' : 'text-slate-600 dark:text-slate-400'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
-      {tab === 'assignments' ? (
+      {tab === 'grades' ? (
+        <Gradebook members={members} assignments={assignments} results={results} />
+      ) : tab === 'news' ? (
+        <News code={code} items={news} onChanged={data.reload} />
+      ) : tab === 'assignments' ? (
         <>
           <Button className="mb-3 w-full" onClick={newAssignment}>
             + واجب جديد (من صور الدرس أو ملاحظاتك)
@@ -131,8 +174,9 @@ export function ClassDashboard({
         </>
       ) : (
         <>
+          {notIn.length > 0 && <AddFromRoster code={code} candidates={notIn} onAdded={data.reload} />}
           {members.length === 0 ? (
-            <Card className="text-center text-slate-500">لم ينضم أي طالب بعد. شارك رمز الفصل معهم.</Card>
+            <Card className="text-center text-slate-500">لا يوجد طلاب بعد. أضف طلابك من تبويب «الطلاب»، أو شارك رمز الفصل.</Card>
           ) : (
             <ul className="grid gap-3">
               {members.map((m) => {
@@ -162,7 +206,14 @@ export function ClassDashboard({
                       {isOpen && (
                         <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
                           <StudentResults hw={hw} />
-                          <div className="mt-3 flex justify-end">
+                          <div className="mt-3 flex flex-wrap justify-between gap-2">
+                            {entryOf(m.uid) ? (
+                              <Button variant="secondary" className="min-h-9 text-sm" onClick={() => openStudentPage(entryOf(m.uid)!.code.code)}>
+                                صفحة الطالب
+                              </Button>
+                            ) : (
+                              <span />
+                            )}
                             <Button
                               variant="ghost"
                               className="min-h-9 text-xs text-rose-700 dark:text-rose-400"
@@ -330,5 +381,183 @@ function StudentResults({ hw }: { hw: ReturnType<typeof studentHomework> }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+/** جدول الدرجات: الطلاب صفوف والواجبات أعمدة. */
+function Gradebook({ members, assignments, results }: { members: Member[]; assignments: Assignment[]; results: Record<string, Result[]> }) {
+  if (!members.length || !assignments.length) {
+    return <Card className="text-center text-slate-500">يظهر الجدول بعد أن يكون في الفصل طلاب وواجبات.</Card>
+  }
+  const cols = [...assignments].sort((a, b) => a.createdAt - b.createdAt)
+  const today = toDayKey()
+  return (
+    <Card className="p-0">
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-max border-collapse text-sm">
+          <thead>
+            <tr className="bg-slate-50 dark:bg-slate-800/60">
+              <th className="sticky start-0 z-10 bg-slate-50 p-2 text-start font-semibold dark:bg-slate-800">الطالب</th>
+              {cols.map((a) => (
+                <th key={a.id} className="max-w-28 p-2 text-center font-medium" title={a.title}>
+                  <span className="line-clamp-2 block text-xs">{a.title}</span>
+                </th>
+              ))}
+              <th className="p-2 text-center font-semibold">المتوسط</th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m) => {
+              const hw = studentHomework(m.uid, cols, results, today, dayOf)
+              return (
+                <tr key={m.uid} className="border-t border-slate-100 dark:border-slate-800">
+                  <th className="sticky start-0 z-10 bg-white p-2 text-start font-medium dark:bg-slate-900">{m.name}</th>
+                  {cols.map((a) => {
+                    const item = hw.items.find((i) => i.id === a.id)
+                    if (!item) return <td key={a.id} className="p-2 text-center text-slate-300">·</td>
+                    const pct = item.total ? Math.round(((item.score ?? 0) / item.total) * 100) : null
+                    return (
+                      <td
+                        key={a.id}
+                        className={`p-2 text-center tabular-nums ${
+                          pct === null
+                            ? item.state === 'overdue'
+                              ? 'text-rose-700 dark:text-rose-400'
+                              : 'text-slate-400'
+                            : pct >= 80
+                              ? 'bg-teal-50 text-teal-800 dark:bg-teal-950/40 dark:text-teal-300'
+                              : pct >= 50
+                                ? 'bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'
+                                : 'bg-rose-50 text-rose-800 dark:bg-rose-950/30 dark:text-rose-300'
+                        }`}
+                      >
+                        {item.total !== undefined ? `${item.score}/${item.total}` : item.state === 'overdue' ? '✗' : '—'}
+                      </td>
+                    )
+                  })}
+                  <td className="p-2 text-center font-semibold tabular-nums">{hw.average === null ? '—' : `${hw.average}%`}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="p-3 text-xs text-slate-500">— لم يحل بعد · ✗ انتهى الموعد ولم يحل · · ليس له</p>
+    </Card>
+  )
+}
+
+/** إعلانات الفصل: يكتبها المعلم وتظهر لطلابه في الرئيسية. */
+function News({ code, items, onChanged }: { code: string; items: import('../../data/classroom').Announcement[]; onChanged: () => void }) {
+  const cloud = useCloudStatus()
+  const { profile } = useProfile()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<string | null>(null)
+  return (
+    <>
+      <Card className="mb-3">
+        <form
+          className="grid gap-2"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            setBusy(true)
+            setMsg(null)
+            try {
+              await postAnnouncement(code, text, cloud.name || profile?.teacherName || 'المعلم')
+              setText('')
+              onChanged()
+            } catch (err) {
+              setMsg(cloudErrorText(err))
+            } finally {
+              setBusy(false)
+            }
+          }}
+        >
+          <textarea
+            className="min-h-20 w-full rounded-xl bg-white px-3 py-2 ring-1 ring-slate-300 focus:ring-2 focus:ring-teal-600 focus:outline-none dark:bg-slate-950 dark:ring-slate-700"
+            aria-label="نص الإعلان"
+            placeholder="اكتب إعلانًا لطلاب الفصل (مثل: اختبار يوم الأحد على الدرس الثالث)"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={1000}
+          />
+          <Button type="submit" disabled={busy || !text.trim()}>
+            انشر الإعلان
+          </Button>
+          {msg && <p className="text-sm text-rose-700 dark:text-rose-400">{msg}</p>}
+        </form>
+      </Card>
+      {items.length === 0 ? (
+        <Card className="text-center text-slate-500">لا توجد إعلانات بعد.</Card>
+      ) : (
+        <ul className="grid gap-2">
+          {items.map((n) => (
+            <li key={n.id}>
+              <Card>
+                <p className="whitespace-pre-line">{n.text}</p>
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                  <span>
+                    {n.byName} · {ago(n.createdAt)}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-rose-700 underline dark:text-rose-400"
+                    onClick={async () => {
+                      if (!window.confirm('حذف الإعلان؟')) return
+                      await deleteAnnouncement(code, n.id)
+                      onChanged()
+                    }}
+                  >
+                    حذف
+                  </button>
+                </div>
+              </Card>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  )
+}
+
+/** إضافة طالب من قائمة المعلم إلى هذا الفصل. */
+function AddFromRoster({ code, candidates, onAdded }: { code: string; candidates: RosterEntry[]; onAdded: () => void }) {
+  const [pick, setPick] = useState('')
+  const [busy, setBusy] = useState(false)
+  return (
+    <Card className="mb-3">
+      <h2 className="mb-2 font-bold">أضف من طلابك</h2>
+      <div className="flex gap-2">
+        <select
+          className="min-w-0 flex-1 rounded-xl bg-white px-3 py-2 ring-1 ring-slate-300 dark:bg-slate-950 dark:ring-slate-700"
+          aria-label="اختر طالبًا"
+          value={pick}
+          onChange={(e) => setPick(e.target.value)}
+        >
+          <option value="">اختر طالبًا…</option>
+          {candidates.map((e) => (
+            <option key={e.code.code} value={e.code.code}>
+              {e.code.name}
+              {e.student ? '' : ' (لم يدخل بعد)'}
+            </option>
+          ))}
+        </select>
+        <Button
+          disabled={!pick || busy}
+          onClick={async () => {
+            const e = candidates.find((c) => c.code.code === pick)
+            if (!e) return
+            setBusy(true)
+            await addToClass(e, code)
+            setBusy(false)
+            setPick('')
+            onAdded()
+          }}
+        >
+          أضف
+        </Button>
+      </div>
+    </Card>
   )
 }

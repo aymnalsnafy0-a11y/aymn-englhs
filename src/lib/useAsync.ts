@@ -26,6 +26,8 @@ export function cloudErrorText(e: unknown): string {
   if (code === 'teacher_code_not_found') return 'رمز المعلم غير صحيح. تأكد منه مع مالك الموقع.'
   if (code === 'teacher_code_used') return 'هذا الرمز خاص بمعلم آخر. اطلب رمزك من مالك الموقع.'
   if (code === 'teacher_code_expired') return 'انتهت مدة هذا الرمز. اطلب من مالك الموقع تمديدها أو رمزًا جديدًا.'
+  if (code === 'student_code_not_found') return 'رمز الطالب غير صحيح. تأكد منه مع معلمك.'
+  if (code === 'student_code_used') return 'هذا الرمز خاص بطالب آخر. اطلب رمزك من معلمك.'
   if (code === 'permission-denied') return 'لا توجد صلاحية. تأكد من تحديث قواعد Firestore في مشروعك.'
   if (code === 'not_found') return 'لا يوجد فصل بهذا الرمز. تأكد منه مع المدرس.'
   if (code === 'unavailable' || code === 'auth/network-request-failed') return 'لا يوجد اتصال بالإنترنت.'

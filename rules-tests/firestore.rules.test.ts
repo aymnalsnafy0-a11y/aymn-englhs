@@ -289,3 +289,70 @@ describe('shared resources', () => {
     await assertSucceeds(setDoc(doc(as('s1'), 'wordContent/milk|n'), c))
   })
 })
+
+describe('student codes, roster and announcements', () => {
+  const linkStudent = (uid: string, code: string, teacherUid = 't1') => {
+    const db = as(uid)
+    const batch = writeBatch(db)
+    batch.set(doc(db, `students/${uid}`), { name: 'طالب', teacherUid, code, classes: [] })
+    batch.update(doc(db, `studentCodes/${code}`), { usedBy: uid, usedAt: 1 })
+    return batch.commit()
+  }
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore()
+      await setDoc(doc(db, 'studentCodes/STU12345'), { teacherUid: 't1', teacherName: 'أ. أيمن', name: 'خالد', classes: ['ABC123'], usedBy: null })
+      await setDoc(doc(db, 'studentNotes/STU12345'), { teacherUid: 't1', notes: 'يحتاج تشجيع' })
+      await setDoc(doc(db, 'students/s1'), { name: 'سارة', teacherUid: 't1', code: 'OLD12345', classes: ['ABC123'] })
+    })
+  })
+
+  it('a teacher creates student codes only in their own name; students cannot', async () => {
+    await assertSucceeds(setDoc(doc(as('t1'), 'studentCodes/NEW12345'), { teacherUid: 't1', name: 'منى', usedBy: null, classes: [] }))
+    await assertFails(setDoc(doc(as('t1'), 'studentCodes/NEW22345'), { teacherUid: 't2', name: 'منى', usedBy: null, classes: [] }))
+    await assertFails(setDoc(doc(as('s1'), 'studentCodes/NEW32345'), { teacherUid: 's1', name: 'x', usedBy: null, classes: [] }))
+    await assertSucceeds(setDoc(doc(as('o1'), 'studentCodes/NEW42345'), { teacherUid: 't2', name: 'لمعلم آخر', usedBy: null, classes: [] }))
+  })
+
+  it('a student links with a code once, to that code’s teacher', async () => {
+    await assertFails(linkStudent('n1', 'STU12345', 't2'))
+    await assertSucceeds(linkStudent('n1', 'STU12345'))
+    await assertFails(linkStudent('n2', 'STU12345'))
+    await assertSucceeds(getDoc(doc(as('t1'), 'students/n1')))
+    await assertFails(getDoc(doc(as('t2'), 'students/n1')))
+  })
+
+  it('notes are private to the teacher', async () => {
+    await assertSucceeds(getDoc(doc(as('t1'), 'studentNotes/STU12345')))
+    await assertSucceeds(setDoc(doc(as('t1'), 'studentNotes/STU12345'), { teacherUid: 't1', notes: 'تحسّن' }))
+    await assertFails(getDoc(doc(as('s1'), 'studentNotes/STU12345')))
+    await assertFails(getDoc(doc(as('t2'), 'studentNotes/STU12345')))
+    await assertSucceeds(getDoc(doc(as('o1'), 'studentNotes/STU12345')))
+  })
+
+  it('a teacher lists only their students, and only changes their classes', async () => {
+    await assertSucceeds(getDocs(query(collection(as('t1'), 'students'), where('teacherUid', '==', 't1'))))
+    await assertFails(getDocs(query(collection(as('t2'), 'students'), where('teacherUid', '==', 't1'))))
+    await assertSucceeds(updateDoc(doc(as('t1'), 'students/s1'), { classes: ['ABC123', 'NEW111'] }))
+    await assertFails(updateDoc(doc(as('t1'), 'students/s1'), { teacherUid: 't2' }))
+    await assertFails(updateDoc(doc(as('s1'), 'students/s1'), { teacherUid: 't2' }))
+    await assertSucceeds(updateDoc(doc(as('s1'), 'students/s1'), { known: 10, lastSeen: 1 }))
+  })
+
+  it('a teacher adds a student to their class; not to someone else’s', async () => {
+    await assertSucceeds(setDoc(doc(as('t1'), 'classes/ABC123/members/n7'), { name: 'جديد' }))
+    await assertFails(setDoc(doc(as('t2'), 'classes/ABC123/members/n8'), { name: 'x' }))
+  })
+
+  it('the owner creates a class for a teacher', async () => {
+    await assertSucceeds(setDoc(doc(as('o1'), 'classes/OWN111'), { name: 'من المالك', teacherUid: 't2' }))
+    await assertSucceeds(getDocs(collection(as('t2'), 'classes/OWN111/members')))
+  })
+
+  it('announcements: the teacher posts, members read, outsiders cannot', async () => {
+    await assertSucceeds(setDoc(doc(as('t1'), 'classes/ABC123/announcements/x1'), { text: 'اختبار يوم الأحد' }))
+    await assertSucceeds(getDocs(collection(as('s1'), 'classes/ABC123/announcements')))
+    await assertFails(getDocs(collection(as('s9'), 'classes/ABC123/announcements')))
+    await assertFails(setDoc(doc(as('s1'), 'classes/ABC123/announcements/x2'), { text: 'غش' }))
+  })
+})

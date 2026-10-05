@@ -27,6 +27,10 @@ export interface Profile {
   teacherName: string
   /** عدد فصول الطالب. */
   classes: number
+  /** الطالب مرتبط بمعلم برمز الطالب. */
+  linked?: boolean
+  /** اسم معلم الطالب (من رمز الطالب). */
+  myTeacher?: string
 }
 
 export interface TeacherInvite {
@@ -186,12 +190,15 @@ export function refreshProfile(): Promise<Profile | null> {
           if (denied(e)) return null
           throw e
         })
-      const [owner, teacher, classes] = await Promise.all([
+      const [owner, teacher, classes, rec] = await Promise.all([
         safe(fs.getDoc(fs.doc(db, 'owners', uid))),
         safe(fs.getDoc(fs.doc(db, 'teachers', uid))),
         fs.getDoc(fs.doc(db, 'learners', uid, 'state', 'english-classes')),
+        safe(fs.getDoc(fs.doc(db, 'students', uid))),
       ])
-      const codes = classes.exists() ? (classes.data().codes as unknown) : []
+      const legacy = classes.exists() && Array.isArray(classes.data().codes) ? (classes.data().codes as string[]) : []
+      const fromRec = rec?.exists() && Array.isArray(rec.data()?.classes) ? (rec.data()!.classes as string[]) : []
+      const codes = [...new Set([...legacy, ...fromRec])]
       const expiresAt = teacher?.exists() ? millis(teacher.data()?.expiresAt) : null
       const expired = !!teacher?.exists() && expiresAt !== null && expiresAt <= Date.now()
       const profile: Profile = {
@@ -202,7 +209,9 @@ export function refreshProfile(): Promise<Profile | null> {
         teacherExpiresAt: expiresAt,
         teacherShareKey: !!teacher?.exists() && teacher.data()?.shareKey === true,
         teacherName: teacher?.exists() ? String(teacher.data()?.name ?? '') : '',
-        classes: Array.isArray(codes) ? codes.length : 0,
+        classes: codes.length,
+        linked: !!rec?.exists(),
+        myTeacher: rec?.exists() ? String(rec.data()?.teacherName ?? '') : undefined,
       }
       write(KEYS.profile, profile)
       set({ profile, loading: false })

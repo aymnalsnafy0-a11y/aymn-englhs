@@ -7,8 +7,11 @@ import { useExtensionBridge } from './db/extensionBridge'
 import { startCloud, useCloudStatus, wasSignedIn } from './data/cloud'
 import { refreshProfile, setMode, useProfile } from './data/roles'
 import { TabBar, type Tab } from './components/TabBar'
-import { JoinFirstClass, ProfileError, SignIn, Splash, TeacherCode, Welcome } from './screens/auth/Entry'
-import { OwnerPanel } from './screens/teach/OwnerPanel'
+import { ProfileError, SignIn, Splash, StudentCodeScreen, TeacherCode, Welcome } from './screens/auth/Entry'
+import { TeachersScreen } from './screens/teach/Teachers'
+import { ClassesScreen } from './screens/teach/ClassesScreen'
+import { StudentsScreen } from './screens/teach/StudentsScreen'
+import { StudentPage } from './screens/teach/StudentPage'
 import { TeacherHome } from './screens/teach/TeacherHome'
 import { DailyCount } from './screens/DailyCount'
 import { Home } from './screens/Home'
@@ -30,12 +33,28 @@ import { StoryLibrary } from './screens/StoryLibrary'
 import type { QuizKind, Theme } from './db/db'
 import type { Level } from './lib/types'
 
-type Page = 'home' | 'learn' | 'review' | 'settings' | 'levels' | 'daily' | 'progress' | 'mistakes' | 'library' | 'placement' | 'classes' | 'owner'
+type Page =
+  | 'home'
+  | 'learn'
+  | 'review'
+  | 'settings'
+  | 'levels'
+  | 'daily'
+  | 'progress'
+  | 'mistakes'
+  | 'library'
+  | 'placement'
+  | 'classes'
+  | 'tclasses'
+  | 'students'
+  | 'teachers'
 type Route =
   | { page: Page }
   | { page: 'quiz'; kind: QuizKind; level?: Level; back: Page }
   | { page: 'story'; storyId?: number; back: Page }
-  | { page: 'class' | 'newAssignment' | 'studentClass'; code: string }
+  | { page: 'class'; code: string; back?: Route }
+  | { page: 'student'; code: string; back?: Route }
+  | { page: 'newAssignment' | 'studentClass'; code: string }
   | { page: 'doAssignment'; code: string; id: string }
 
 function useTheme(theme: Theme | undefined) {
@@ -67,11 +86,12 @@ const STAFF_LEARN_TABS: Tab[] = [
   { id: 'settings', label: 'الإعدادات', icon: 'gear' },
 ]
 const TEACH_TABS: Tab[] = [
-  { id: 'home', label: 'الطلاب', icon: 'class' },
-  { id: 'learn', label: 'تعلّمي', icon: 'book' },
+  { id: 'home', label: 'الرئيسية', icon: 'home' },
+  { id: 'tclasses', label: 'الفصول', icon: 'board' },
+  { id: 'students', label: 'الطلاب', icon: 'class' },
   { id: 'settings', label: 'الإعدادات', icon: 'gear' },
 ]
-const OWNER_TABS: Tab[] = [TEACH_TABS[0], { id: 'owner', label: 'المالك', icon: 'crown' }, ...TEACH_TABS.slice(1)]
+const OWNER_TABS: Tab[] = [...TEACH_TABS.slice(0, 3), { id: 'teachers', label: 'المعلمون', icon: 'crown' }, TEACH_TABS[3]]
 
 export default function App() {
   const settings = useSettings()
@@ -127,7 +147,8 @@ export default function App() {
 
   const staff = profile.owner || profile.teacher
   if (!staff && roles.role === 'teacher') return <TeacherCode />
-  if (!staff && profile.classes === 0) return <JoinFirstClass />
+  // الطالب يبدأ برمز الطالب من معلمه (الطلاب القدامى المنضمون لفصول يكملون كما هم).
+  if (!staff && !profile.linked && profile.classes === 0) return <StudentCodeScreen />
 
   const withTabs = (tabs: Tab[], active: string, screen: React.ReactNode) => (
     <div className="pb-20">
@@ -148,10 +169,21 @@ export default function App() {
   // ——— لوحة المعلم والمالك ———
   if (staff && roles.mode === 'teach') {
     const tabs = profile.owner ? OWNER_TABS : TEACH_TABS
-    const openClass = (code: string) => setRoute({ page: 'class', code })
+    const here = route
+    const openClass = (code: string) => setRoute({ page: 'class', code, back: here })
+    const openStudent = (code: string) => setRoute({ page: 'student', code, back: here })
+    const back = (r: Route | undefined, fallback: Page) => () => setRoute(r ?? { page: fallback })
     switch (route.page) {
       case 'class':
-        return <ClassDashboard key={route.code} code={route.code} onBack={home} newAssignment={() => setRoute({ page: 'newAssignment', code: route.code })} />
+        return (
+          <ClassDashboard
+            key={route.code}
+            code={route.code}
+            onBack={back(route.back, 'tclasses')}
+            newAssignment={() => setRoute({ page: 'newAssignment', code: route.code })}
+            openStudent={openStudent}
+          />
+        )
       case 'newAssignment':
         return (
           <NewAssignment
@@ -160,13 +192,30 @@ export default function App() {
             onDone={() => setRoute({ page: 'class', code: route.code })}
           />
         )
-      case 'owner':
-        if (profile.owner) return withTabs(tabs, 'owner', <OwnerPanel openClass={openClass} />)
+      case 'student':
+        return <StudentPage key={route.code} code={route.code} onBack={back(route.back, 'students')} openClass={openClass} />
+      case 'tclasses':
+        return withTabs(tabs, 'tclasses', <ClassesScreen openClass={openClass} />)
+      case 'students':
+        return withTabs(tabs, 'students', <StudentsScreen openStudent={openStudent} />)
+      case 'teachers':
+        if (profile.owner) return withTabs(tabs, 'teachers', <TeachersScreen />)
         break
       case 'settings':
         return withTabs(tabs, 'settings', <SettingsScreen go={go} teaching />)
     }
-    return withTabs(tabs, 'home', <TeacherHome openClass={openClass} openOwner={() => go('owner')} />)
+    return withTabs(
+      tabs,
+      'home',
+      <TeacherHome
+        go={(t) => go(t === 'classes' ? 'tclasses' : t)}
+        openStudent={openStudent}
+        learn={() => {
+          setMode('learn')
+          home()
+        }}
+      />,
+    )
   }
 
   // ——— التعلّم: الإعداد الأولي (المستوى ثم عدد الكلمات اليومي) ———
@@ -227,7 +276,7 @@ export default function App() {
       go={go}
       startQuiz={quiz('home')}
       openStory={() => setRoute({ page: 'story', back: 'home' })}
-      openStudentClass={(code) => setRoute({ page: 'studentClass', code })}
+      openAssignment={(code, id) => setRoute({ page: 'doAssignment', code, id })}
     />,
   )
 }

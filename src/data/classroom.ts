@@ -47,18 +47,32 @@ export async function withStudentCounts(classes: ClassInfo[]): Promise<ClassInfo
 
 // ——— المدرس ———
 
-export async function createClass(name: string, teacherName: string): Promise<ClassInfo> {
+/** ينشئ فصلًا. المالك يمرّر المعلم المسؤول؛ وإلا يكون الفصل للمستخدم نفسه. */
+export async function createClass(name: string, teacherName: string, teacherUid?: string): Promise<ClassInfo> {
   const { db, fs, uid } = await cloudSdk()
   for (let i = 0; i < 5; i++) {
     const code = generateCode()
     const ref = fs.doc(db, 'classes', code)
     // الرمز عشوائي؛ نتأكد أنه غير مستخدم.
     if ((await fs.getDoc(ref)).exists()) continue
-    const info = { name: name.trim().slice(0, 60), teacherUid: uid, teacherName: teacherName.trim().slice(0, 40), createdAt: Date.now() }
+    const info = { name: name.trim().slice(0, 60), teacherUid: teacherUid ?? uid, teacherName: teacherName.trim().slice(0, 40), createdAt: Date.now() }
     await fs.setDoc(ref, info)
     return { code, ...info }
   }
   throw new Error('code_collision')
+}
+
+/** فصول معلم محدد (للمالك). */
+export async function classesOf(teacherUid: string): Promise<ClassInfo[]> {
+  const { db, fs } = await cloudSdk()
+  const col = fs.collection(db, 'classes')
+  const [own, co] = await Promise.all([
+    fs.getDocs(fs.query(col, fs.where('teacherUid', '==', teacherUid))),
+    fs.getDocs(fs.query(col, fs.where('teachers', 'array-contains', teacherUid))).catch(() => null),
+  ])
+  const byCode = new Map<string, ClassInfo>()
+  for (const d of [...own.docs, ...(co?.docs ?? [])]) byCode.set(d.id, { code: d.id, ...(d.data() as Omit<ClassInfo, 'code'>) })
+  return withStudentCounts([...byCode.values()].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)))
 }
 
 /** فصول المعلم: التي يملكها والتي هو مشارك فيها. */
@@ -131,6 +145,35 @@ export async function listResults(code: string, id: string): Promise<Result[]> {
   return snap.docs.map((d) => ({ uid: d.id, ...(d.data() as Omit<Result, 'uid'>) }))
 }
 
+// ——— الإعلانات ———
+
+export interface Announcement {
+  id: string
+  text: string
+  byName: string
+  createdAt: number
+  classCode: string
+  className?: string
+}
+
+export async function listAnnouncements(code: string): Promise<Announcement[]> {
+  const { db, fs } = await cloudSdk()
+  const snap = await fs.getDocs(fs.collection(db, 'classes', code, 'announcements'))
+  return snap.docs
+    .map((d) => ({ id: d.id, classCode: code, ...(d.data() as Omit<Announcement, 'id' | 'classCode'>) }))
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function postAnnouncement(code: string, text: string, byName: string): Promise<void> {
+  const { db, fs } = await cloudSdk()
+  await fs.addDoc(fs.collection(db, 'classes', code, 'announcements'), { text: text.trim().slice(0, 1000), byName, createdAt: Date.now() })
+}
+
+export async function deleteAnnouncement(code: string, id: string): Promise<void> {
+  const { db, fs } = await cloudSdk()
+  await fs.deleteDoc(fs.doc(db, 'classes', code, 'announcements', id))
+}
+
 // ——— مشترك ———
 
 export async function getClass(code: string): Promise<ClassInfo | null> {
@@ -165,16 +208,26 @@ interface MyClasses {
   name: string
 }
 
+/** فصول الطالب: من سجله عند معلمه (students/{uid}) ومن قائمته القديمة. */
 async function readMyClasses(): Promise<MyClasses> {
   const { db, fs, uid } = await cloudSdk()
-  const snap = await fs.getDoc(fs.doc(db, 'learners', uid, 'state', 'english-classes'))
-  const data = snap.exists() ? (snap.data() as Partial<MyClasses>) : {}
-  return { codes: Array.isArray(data.codes) ? data.codes : [], name: data.name ?? '' }
+  const [legacy, rec] = await Promise.all([
+    fs.getDoc(fs.doc(db, 'learners', uid, 'state', 'english-classes')),
+    fs.getDoc(fs.doc(db, 'students', uid)).catch(() => null),
+  ])
+  const data = legacy.exists() ? (legacy.data() as Partial<MyClasses>) : {}
+  const fromRec = rec?.exists() && Array.isArray(rec.data().classes) ? (rec.data().classes as string[]) : []
+  const codes = [...new Set([...(Array.isArray(data.codes) ? data.codes : []), ...fromRec])]
+  const name = (rec?.exists() ? String(rec.data().name ?? '') : '') || data.name || ''
+  return { codes, name }
 }
 
 async function writeMyClasses(value: MyClasses): Promise<void> {
   const { db, fs, uid } = await cloudSdk()
   await fs.setDoc(fs.doc(db, 'learners', uid, 'state', 'english-classes'), value)
+  // الطالب المرتبط بمعلم: فصوله في سجله أيضًا (يراها معلمه).
+  const recRef = fs.doc(db, 'students', uid)
+  if ((await fs.getDoc(recRef).catch(() => null))?.exists()) await fs.updateDoc(recRef, { classes: value.codes }).catch(() => {})
   await local.meta.put({ key: 'myClasses', value })
 }
 
@@ -188,12 +241,24 @@ export async function myStudentClasses(): Promise<{ name: string; classes: Class
 export async function joinClass(code: string, name: string): Promise<ClassInfo> {
   const info = await getClass(code)
   if (!info) throw Object.assign(new Error('not_found'), { code: 'not_found' })
+  const mine = await readMyClasses()
+  const clean = (name.trim() || mine.name).slice(0, 40)
+  await enterClasses([code], clean)
+  return info
+}
+
+/** يدخل الطالب فصولًا (برمز الفصل أو من رمز الطالب) ويحفظها في قائمته. */
+export async function enterClasses(codes: string[], name: string): Promise<void> {
   const { db, fs, uid } = await cloudSdk()
   const clean = name.trim().slice(0, 40)
-  await fs.setDoc(fs.doc(db, 'classes', code, 'members', uid), { name: clean, joinedAt: Date.now(), ...(await myStats()) })
+  const stats = await myStats()
+  for (const code of codes) {
+    await fs.setDoc(fs.doc(db, 'classes', code, 'members', uid), { name: clean, joinedAt: Date.now(), ...stats }, { merge: true }).catch((e) => {
+      console.warn('[classes] join', code, e?.code)
+    })
+  }
   const mine = await readMyClasses()
-  await writeMyClasses({ codes: [...new Set([...mine.codes, code])], name: clean })
-  return info
+  await writeMyClasses({ codes: [...new Set([...mine.codes, ...codes])], name: clean || mine.name })
 }
 
 export async function leaveClass(code: string): Promise<void> {
@@ -201,6 +266,13 @@ export async function leaveClass(code: string): Promise<void> {
   await fs.deleteDoc(fs.doc(db, 'classes', code, 'members', uid)).catch(() => {})
   const mine = await readMyClasses()
   await writeMyClasses({ ...mine, codes: mine.codes.filter((c) => c !== code) })
+}
+
+/** نتيجة طالب محدد (للمعلم). */
+export async function getMyResultFor(code: string, id: string, uid: string): Promise<Result | null> {
+  const { db, fs } = await cloudSdk()
+  const snap = await fs.getDoc(fs.doc(db, 'classes', code, 'assignments', id, 'results', uid))
+  return snap.exists() ? ({ uid, ...(snap.data() as Omit<Result, 'uid'>) } as Result) : null
 }
 
 export async function getMyResult(code: string, id: string): Promise<Result | null> {
@@ -231,33 +303,59 @@ async function myStats() {
   }
 }
 
+/** ينشر ملخص التقدّم لفصول الطالب ولسجله عند معلمه. */
 export async function publishMemberStats(): Promise<void> {
-  const cached = (await local.meta.get('myClasses'))?.value as MyClasses | undefined
-  if (!cached?.codes.length) return
   const { db, fs, uid } = await cloudSdk()
+  const mine = await readMyClasses().catch(() => (local.meta.get('myClasses').then((r) => r?.value as MyClasses | undefined)))
+  if (mine) await local.meta.put({ key: 'myClasses', value: mine })
   const stats = await myStats()
+  const recRef = fs.doc(db, 'students', uid)
+  if ((await fs.getDoc(recRef).catch(() => null))?.exists()) await fs.updateDoc(recRef, stats).catch(() => {})
+  if (!mine?.codes.length) return
   await Promise.all(
-    cached.codes.map((code) =>
-      fs.setDoc(fs.doc(db, 'classes', code, 'members', uid), { name: cached.name, ...stats }, { merge: true }),
+    mine.codes.map((code) =>
+      fs.setDoc(fs.doc(db, 'classes', code, 'members', uid), { name: mine.name, ...stats }, { merge: true }).catch(() => {}),
     ),
   )
 }
 
 export type { Assignment, AssignmentWord, Member, Result }
 
-/** عدد واجبات الطالب غير المحلولة في كل فصوله (للبطاقة في الرئيسية). */
-export async function pendingHomework(): Promise<{ count: number; firstCode?: string }> {
-  const cached = (await local.meta.get('myClasses'))?.value as MyClasses | undefined
-  if (!cached?.codes.length) return { count: 0 }
-  let count = 0
-  let firstCode: string | undefined
+export interface PendingItem {
+  classCode: string
+  className: string
+  assignment: Assignment
+}
+
+/** ما يحتاجه الطالب من معلمه: الواجبات غير المحلولة وآخر الإعلانات (للرئيسية). */
+export async function studentInbox(): Promise<{ pending: PendingItem[]; announcements: Announcement[] }> {
   const { uid } = await cloudSdk()
-  for (const code of cached.codes) {
-    const assignments = (await listAssignments(code).catch(() => [])).filter((a) => isAssignedTo(a, uid))
-    const results = await Promise.all(assignments.map((a) => getMyResult(code, a.id).catch(() => null)))
-    const open = results.filter((r) => !r).length
-    if (open && !firstCode) firstCode = code
-    count += open
-  }
-  return { count, firstCode }
+  const mine = await readMyClasses()
+  await local.meta.put({ key: 'myClasses', value: mine })
+  const pending: PendingItem[] = []
+  const announcements: Announcement[] = []
+  await Promise.all(
+    mine.codes.map(async (code) => {
+      const info = await getClass(code).catch(() => null)
+      if (!info) return
+      const assignments = (await listAssignments(code).catch(() => [])).filter((a) => isAssignedTo(a, uid))
+      const results = await Promise.all(assignments.map((a) => getMyResult(code, a.id).catch(() => null)))
+      assignments.forEach((a, i) => {
+        if (!results[i]) pending.push({ classCode: code, className: info.name, assignment: a })
+      })
+      const weekAgo = Date.now() - 7 * 864e5
+      for (const n of await listAnnouncements(code).catch(() => [])) {
+        if (n.createdAt >= weekAgo) announcements.push({ ...n, className: info.name })
+      }
+    }),
+  )
+  pending.sort((a, b) => (a.assignment.dueAt ?? '9999').localeCompare(b.assignment.dueAt ?? '9999') || b.assignment.createdAt - a.assignment.createdAt)
+  announcements.sort((a, b) => b.createdAt - a.createdAt)
+  return { pending, announcements }
+}
+
+/** عدد واجبات الطالب غير المحلولة في كل فصوله. */
+export async function pendingHomework(): Promise<{ count: number; firstCode?: string }> {
+  const { pending } = await studentInbox()
+  return { count: pending.length, firstCode: pending[0]?.classCode }
 }

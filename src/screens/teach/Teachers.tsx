@@ -50,7 +50,8 @@ function Expiry({ t }: { t: Teacher }) {
 const select =
   'rounded-xl bg-white px-3 py-2 ring-1 ring-slate-300 focus:ring-2 focus:ring-teal-600 focus:outline-none dark:bg-slate-950 dark:ring-slate-700'
 
-function Share({ code }: { code: string }) {
+/** نسخ وإرسال بالواتساب لنص دعوة. */
+export function ShareText({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <span className="flex gap-1">
@@ -59,7 +60,7 @@ function Share({ code }: { code: string }) {
         className="min-h-9 px-3 text-sm"
         onClick={async () => {
           try {
-            await navigator.clipboard.writeText(inviteText(code))
+            await navigator.clipboard.writeText(text)
             setCopied(true)
             setTimeout(() => setCopied(false), 2000)
           } catch {
@@ -71,7 +72,7 @@ function Share({ code }: { code: string }) {
       </Button>
       <a
         className="inline-flex min-h-9 items-center rounded-xl bg-[#25D366] px-3 text-sm font-medium text-white"
-        href={`https://wa.me/?text=${encodeURIComponent(inviteText(code))}`}
+        href={`https://wa.me/?text=${encodeURIComponent(text)}`}
         target="_blank"
         rel="noreferrer"
       >
@@ -81,8 +82,8 @@ function Share({ code }: { code: string }) {
   )
 }
 
-/** لوحة المالك: رموز دخول المعلمين، المعلمون، وكل الفصول. */
-export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openClass: (code: string) => void }) {
+/** للمالك: رموز دخول المعلمين وقائمة المعلمين. */
+export function TeachersScreen({ onBack }: { onBack?: () => void }) {
   const data = useAsync(async () => {
     const [invites, teachers, classes] = await Promise.all([listTeacherInvites(), listTeachers(), allClasses()])
     return { invites, teachers, classes }
@@ -111,33 +112,16 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
 
   if (data.error) {
     return (
-      <Screen title="لوحة المالك" onBack={onBack}>
+      <Screen title="المعلمون" onBack={onBack}>
         <Card className="text-rose-700 dark:text-rose-400">{cloudErrorText(data.error)}</Card>
       </Screen>
     )
   }
   const d = data.data
-  const unused = d?.invites.filter((i) => !i.usedBy) ?? []
   const classesBy = (uid: string) => d?.classes.filter((c) => c.teacherUid === uid).length ?? 0
 
   return (
-    <Screen title="لوحة المالك" onBack={onBack}>
-      {d && (
-        <div className="mb-4 grid grid-cols-3 gap-2 text-center">
-          {[
-            { n: d.teachers.length, label: 'معلم' },
-            { n: d.classes.length, label: 'فصل' },
-            { n: unused.length, label: 'رمز لم يُفعَّل' },
-          ].map((s) => (
-            <Card key={s.label} className="p-3">
-              <p className="text-3xl font-bold tabular-nums text-teal-700 dark:text-teal-400">{s.n}</p>
-              <p className="text-xs text-slate-500">{s.label}</p>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <SharedCard />
+    <Screen title="المعلمون" onBack={onBack}>
 
       <Card className="mb-4">
         <h2 className="text-lg font-bold">رمز دخول لمعلم جديد</h2>
@@ -167,7 +151,7 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
             <p dir="ltr" className="font-en text-2xl font-bold tracking-[0.2em] whitespace-nowrap text-teal-800 dark:text-teal-300">
               {formatCode(fresh)}
             </p>
-            <Share code={fresh} />
+            <ShareText text={inviteText(fresh)} />
           </div>
         )}
 
@@ -188,7 +172,7 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
                   <span className="text-teal-700 dark:text-teal-400">✓ مرتبط بـ{i.usedName || 'معلم'}</span>
                 ) : (
                   <span className="flex items-center gap-1">
-                    <Share code={i.code} />
+                    <ShareText text={inviteText(i.code)} />
                     <Button
                       variant="ghost"
                       className="min-h-9 px-2 text-sm text-rose-700 dark:text-rose-400"
@@ -280,26 +264,12 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
         )}
       </Card>
 
-      <Card>
-        <h2 className="text-lg font-bold">كل الفصول</h2>
-        {!d ? (
-          <p className="mt-2 text-sm text-slate-500">جارٍ التحميل…</p>
-        ) : d.classes.length === 0 ? (
-          <p className="mt-1 text-sm text-slate-500">لا توجد فصول بعد.</p>
-        ) : (
-          <ul className="mt-2 grid gap-2">
-            {d.classes.map((c) => (
-              <ClassRow key={c.code} c={c} teachers={d.teachers} open={() => openClass(c.code)} onChanged={data.reload} />
-            ))}
-          </ul>
-        )}
-      </Card>
     </Screen>
   )
 }
 
 /** الموارد المشتركة: قائمة الكلمات للجميع، مفتاح Gemini، وتجهيز شرح كل الكلمات. */
-function SharedCard() {
+export function SharedCard() {
   const state = useAsync(sharedState, [])
   const ready = useAsync(sharedCount, [])
   const prep = usePrepare()
@@ -411,7 +381,7 @@ function SharedCard() {
 }
 
 /** فصل في لوحة المالك: فتحه، نقله لمعلم آخر، وتعيين المعلمين المشاركين. */
-function ClassRow({ c, teachers, open, onChanged }: { c: ClassInfo; teachers: Teacher[]; open: () => void; onChanged: () => void }) {
+export function ClassRow({ c, teachers, open, onChanged }: { c: ClassInfo; teachers: Teacher[]; open: () => void; onChanged: () => void }) {
   const { profile } = useProfile()
   const [manage, setManage] = useState(false)
   const [busy, setBusy] = useState(false)

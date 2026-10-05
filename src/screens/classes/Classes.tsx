@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Card, Screen } from '../../components/ui'
-import { refreshProfile } from '../../data/roles'
+import { refreshProfile, useProfile } from '../../data/roles'
 import { createClass, joinClass, leaveClass, myStudentClasses, myTeacherClasses } from '../../data/classroom'
 import { formatCode, normalizeCode } from '../../lib/classroom'
 import { cloudErrorText, useAsync } from '../../lib/useAsync'
@@ -10,8 +10,18 @@ const input =
 
 /** «فصلي» للطالب: فصوله وواجباته والانضمام لفصل آخر. */
 export function Classes({ onBack, openStudentClass }: { onBack?: () => void; openStudentClass: (code: string) => void }) {
+  const { profile } = useProfile()
   return (
     <Screen title="فصلي" onBack={onBack}>
+      {profile?.myTeacher && (
+        <Card className="mb-4 flex items-center gap-3">
+          <span aria-hidden="true" className="text-3xl">🧑‍🏫</span>
+          <span>
+            <span className="block text-sm text-slate-500">معلمك</span>
+            <span className="block text-lg font-bold">{profile.myTeacher}</span>
+          </span>
+        </Card>
+      )}
       <StudentSection openStudentClass={openStudentClass} />
     </Screen>
   )

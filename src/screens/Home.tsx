@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useCloudStatus } from '../data/cloud'
-import { pendingHomework } from '../data/classroom'
+import { studentInbox, type Announcement, type PendingItem } from '../data/classroom'
 import { Button, Card, LevelBadge, ProgressBar, Screen } from '../components/ui'
 import { SetupCard } from '../components/AiSettings'
 import { ensureContent } from '../data/content'
@@ -51,17 +51,17 @@ export function Home({
   go,
   startQuiz,
   openStory,
-  openStudentClass,
+  openAssignment,
 }: {
   go: Go
   startQuiz: (kind: QuizKind) => void
   openStory: () => void
-  openStudentClass: (code: string) => void
+  openAssignment: (code: string, id: string) => void
 }) {
   const cloud = useCloudStatus()
-  const [homework, setHomework] = useState<{ count: number; firstCode?: string }>({ count: 0 })
+  const [inbox, setInbox] = useState<{ pending: PendingItem[]; announcements: Announcement[] }>({ pending: [], announcements: [] })
   useEffect(() => {
-    if (cloud.state === 'signedIn') void pendingHomework().then(setHomework).catch(() => {})
+    if (cloud.state === 'signedIn') void studentInbox().then(setInbox).catch(() => {})
   }, [cloud.state])
   const stats = useStats()
   const plan = useTodayPlan()
@@ -126,18 +126,45 @@ export function Home({
 
       <SetupCard onOpenSettings={() => go('settings')} />
 
-      {homework.count > 0 && (
-        <button
-          type="button"
-          onClick={() => (homework.firstCode ? openStudentClass(homework.firstCode) : go('classes'))}
-          className="mb-4 flex w-full items-center justify-between gap-3 rounded-2xl bg-amber-50 p-4 text-start ring-1 ring-amber-300 hover:bg-amber-100 dark:bg-amber-950/30 dark:ring-amber-800"
-        >
-          <span>
-            <span className="block font-bold">📚 عندك {homework.count === 1 ? 'واجب جديد' : `${homework.count} واجبات`} من المدرس</span>
-            <span className="block text-sm text-slate-600 dark:text-slate-400">اضغط لتحلّه</span>
-          </span>
-          <span aria-hidden="true">←</span>
-        </button>
+      {(inbox.pending.length > 0 || inbox.announcements.length > 0) && (
+        <Card className="mb-4 ring-amber-300 dark:ring-amber-800">
+          <h2 className="mb-2 font-bold">من معلمك</h2>
+          {inbox.announcements.slice(0, 3).map((n) => (
+            <div key={n.id} className="mb-2 rounded-xl bg-amber-50 p-3 text-sm dark:bg-amber-950/30">
+              <p className="whitespace-pre-line">📢 {n.text}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {n.byName} · {n.className}
+              </p>
+            </div>
+          ))}
+          {inbox.pending.length > 0 && (
+            <ul className="grid gap-2">
+              {inbox.pending.slice(0, 5).map((p) => (
+                <li key={`${p.classCode}-${p.assignment.id}`}>
+                  <button
+                    type="button"
+                    onClick={() => openAssignment(p.classCode, p.assignment.id)}
+                    className="flex w-full items-center justify-between gap-3 rounded-xl bg-slate-50 p-3 text-start hover:bg-slate-100 dark:bg-slate-800/60 dark:hover:bg-slate-800"
+                  >
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
+                      <span className="block font-semibold">📚 {p.assignment.title}</span>
+                      <span className="block text-xs text-slate-500">
+                        {p.className}
+                        {p.assignment.dueAt && <> · التسليم <span dir="ltr">{p.assignment.dueAt}</span></>}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-medium text-white">حلّه</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {inbox.pending.length > 5 && (
+            <Button variant="ghost" className="mt-2 text-sm" onClick={() => go('classes')}>
+              كل الواجبات ({inbox.pending.length})
+            </Button>
+          )}
+        </Card>
       )}
 
       {saved && saved.some((s) => !stats.progressMap.has(s.wordId)) && (
