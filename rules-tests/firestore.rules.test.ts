@@ -3,7 +3,7 @@
  *   npm run test:rules
  */
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, where } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, query, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 
@@ -25,6 +25,11 @@ beforeEach(async () => {
   // فصل للمدرس t1 فيه الطالب s1 وواجب واحد ونتيجة للطالب s1.
   await env.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore()
+    await setDoc(doc(db, 'owners/o1'), { role: 'owner' })
+    await setDoc(doc(db, 'teachers/t1'), { name: 'أ. أيمن' })
+    await setDoc(doc(db, 'teachers/t2'), { name: 'أ. سالم' })
+    await setDoc(doc(db, 'teacherInvites/FREE2345'), { label: 'معلم جديد', usedBy: null })
+    await setDoc(doc(db, 'teacherInvites/USED2345'), { label: 'مستخدم', usedBy: 't2' })
     await setDoc(doc(db, 'classes/ABC123'), { name: 'فصل أ', teacherUid: 't1', teacherName: 'أ. أيمن' })
     await setDoc(doc(db, 'classes/ABC123/members/s1'), { name: 'سارة' })
     await setDoc(doc(db, 'classes/ABC123/assignments/a1'), { title: 'العائلة', words: [] })
@@ -43,11 +48,64 @@ describe('private learner data', () => {
   })
 })
 
+const redeem = (uid: string, code: string) => {
+  const db = as(uid)
+  const batch = writeBatch(db)
+  batch.set(doc(db, `teachers/${uid}`), { name: 'معلم', invite: code })
+  batch.update(doc(db, `teacherInvites/${code}`), { usedBy: uid, usedName: 'معلم', usedAt: 1 })
+  return batch.commit()
+}
+
+describe('roles', () => {
+  it('nobody can make themself an owner from the site', async () => {
+    await assertFails(setDoc(doc(as('x1'), 'owners/x1'), { role: 'owner' }))
+    await assertSucceeds(getDoc(doc(as('o1'), 'owners/o1')))
+    await assertFails(getDoc(doc(as('x1'), 'owners/o1')))
+  })
+
+  it('only the owner creates and lists teacher codes', async () => {
+    await assertSucceeds(setDoc(doc(as('o1'), 'teacherInvites/NEWC2345'), { label: 'x', usedBy: null }))
+    await assertFails(setDoc(doc(as('t1'), 'teacherInvites/NEWD2345'), { label: 'x', usedBy: null }))
+    await assertSucceeds(getDocs(collection(as('o1'), 'teacherInvites')))
+    await assertFails(getDocs(collection(as('t1'), 'teacherInvites')))
+    await assertSucceeds(getDoc(doc(as('s9'), 'teacherInvites/FREE2345')))
+  })
+
+  it('a valid unused code makes you a teacher, once', async () => {
+    await assertSucceeds(redeem('n1', 'FREE2345'))
+    await assertFails(redeem('n2', 'FREE2345'))
+    await assertFails(redeem('n3', 'USED2345'))
+    await assertFails(redeem('n4', 'NOPE2345'))
+  })
+
+  it('becoming a teacher without a code, or marking a code without becoming a teacher, fails', async () => {
+    await assertFails(setDoc(doc(as('n5'), 'teachers/n5'), { name: 'منتحل', invite: 'FREE2345' }))
+    await assertFails(updateDoc(doc(as('n6'), 'teacherInvites/FREE2345'), { usedBy: 'n6' }))
+    await assertFails(setDoc(doc(as('n7'), 'teachers/n7'), { name: 'x' }))
+  })
+
+  it('the owner lists and revokes teachers; a revoked teacher loses the class', async () => {
+    await assertSucceeds(getDocs(collection(as('o1'), 'teachers')))
+    await assertFails(getDocs(collection(as('t1'), 'teachers')))
+    await assertSucceeds(deleteDoc(doc(as('o1'), 'teachers/t1')))
+    await assertFails(getDocs(collection(as('t1'), 'classes/ABC123/members')))
+    await assertFails(setDoc(doc(as('t1'), 'classes/NEW444'), { name: 'جديد', teacherUid: 't1' }))
+  })
+
+  it('the owner sees every class and its results', async () => {
+    await assertSucceeds(getDocs(collection(as('o1'), 'classes')))
+    await assertSucceeds(getDocs(collection(as('o1'), 'classes/ABC123/members')))
+    await assertSucceeds(getDocs(collection(as('o1'), 'classes/ABC123/assignments/a1/results')))
+  })
+})
+
 describe('classes', () => {
-  it('a teacher creates a class only in their own name', async () => {
+  it('a teacher creates a class only in their own name; students cannot create classes', async () => {
     await assertSucceeds(setDoc(doc(as('t1'), 'classes/NEW111'), { name: 'جديد', teacherUid: 't1' }))
     await assertFails(setDoc(doc(as('t1'), 'classes/NEW222'), { name: 'مزيّف', teacherUid: 't2' }))
     await assertFails(setDoc(doc(anon(), 'classes/NEW333'), { name: 'x', teacherUid: 'x' }))
+    await assertFails(setDoc(doc(as('s1'), 'classes/NEW555'), { name: 'x', teacherUid: 's1' }))
+    await assertSucceeds(setDoc(doc(as('o1'), 'classes/NEW666'), { name: 'فصل المالك', teacherUid: 'o1' }))
   })
 
   it('anyone signed in can open a class by its code, but only the teacher lists their classes', async () => {

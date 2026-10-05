@@ -22,7 +22,9 @@ export function useAsync<T>(load: () => Promise<T>, deps: unknown[]) {
 /** رسالة عربية لأخطاء Firestore الشائعة. */
 export function cloudErrorText(e: unknown): string {
   const code = (e as { code?: string })?.code ?? ''
-  if (code === 'signed_out') return 'سجّل الدخول أولًا من الإعدادات.'
+  if (code === 'signed_out') return 'سجّل الدخول أولًا.'
+  if (code === 'teacher_code_not_found') return 'رمز المعلم غير صحيح. تأكد منه مع مالك الموقع.'
+  if (code === 'teacher_code_used') return 'هذا الرمز استُخدم من قبل. اطلب رمزًا جديدًا من مالك الموقع.'
   if (code === 'permission-denied') return 'لا توجد صلاحية. تأكد من تحديث قواعد Firestore في مشروعك.'
   if (code === 'not_found') return 'لا يوجد فصل بهذا الرمز. تأكد منه مع المدرس.'
   if (code === 'unavailable' || code === 'auth/network-request-failed') return 'لا يوجد اتصال بالإنترنت.'

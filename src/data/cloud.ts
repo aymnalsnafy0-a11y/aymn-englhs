@@ -18,7 +18,9 @@ import { DOCS, FIREBASE_CONFIG } from './firebaseConfig'
 
 export interface CloudStatus {
   state: 'off' | 'loading' | 'signedOut' | 'signedIn'
+  uid?: string
   email?: string
+  name?: string
   syncing?: boolean
   lastSync?: number
   error?: string
@@ -95,10 +97,11 @@ function init(): Promise<Sdk> {
     au.onAuthStateChanged(auth, (user) => {
       if (user) {
         flag.set(true)
-        set({ state: 'signedIn', email: user.email ?? undefined })
+        set({ state: 'signedIn', uid: user.uid, email: user.email ?? undefined, name: user.displayName ?? undefined })
         void syncNow()
       } else {
-        set({ state: 'signedOut', email: undefined })
+        flag.set(false)
+        set({ state: 'signedOut', uid: undefined, email: undefined, name: undefined })
       }
     })
     return sdk
@@ -108,6 +111,11 @@ function init(): Promise<Sdk> {
     throw e
   })
   return initPromise
+}
+
+/** هل سجّل المستخدم الدخول على هذا الجهاز من قبل؟ (لنعرض التطبيق مباشرة بدل شاشة الترحيب.) */
+export function wasSignedIn(): boolean {
+  return flag.get()
 }
 
 /** عند فتح التطبيق: نتصل فقط إذا سبق تسجيل الدخول على هذا الجهاز. */

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { WordListImport } from '../components/AiSettings'
-import { Button, Card, En, LevelBadge, Screen } from '../components/ui'
+import { Button, Card, LevelBadge, Screen } from '../components/ui'
 import { chooseStartLevel } from '../db/actions'
 import { useLoadInfo, useSettings, useWords } from '../db/hooks'
 import { formatDuration, formatWords } from '../lib/format'
@@ -43,10 +43,10 @@ export function LevelPicker({
     <Screen title={onBack ? 'تغيير المستوى' : undefined} onBack={onBack}>
       {!onBack && (
         <div className="mb-6 text-center">
-          <p className="mb-2 text-sm font-medium text-teal-700 dark:text-teal-400">سياق · كلمات أكسفورد 5000</p>
-          <h1 className="text-3xl font-bold">من وين تحب تبدأ؟</h1>
-          <p className="mt-3 text-slate-600 dark:text-slate-400">
-            اختر مستوى البداية. الكلمات في المستويات التي قبله تُحتسب «معروفة»، ويمكنك مراجعتها متى شئت.
+          <p className="mb-2 text-sm font-medium text-teal-700 dark:text-teal-400">خطوة 1 من 2</p>
+          <h1 className="text-2xl font-bold">من وين تحب تبدأ؟</h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            ما قبل مستواك يُحتسب «معروفًا». مش متأكد؟ في الأسفل اختبار قصير يحدد مستواك.
           </p>
         </div>
       )}
@@ -62,56 +62,43 @@ export function LevelPicker({
         </p>
       )}
       {isSample && (
-        <Card className="mb-4 ring-amber-300 dark:ring-amber-800">
-          <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-            عندك ملف قائمة أكسفورد (oxford5000.csv)؟ حمّله أولًا لتبدأ بكل الكلمات. يبقى في جهازك فقط.
-          </p>
+        <details className="mb-4 rounded-2xl bg-white p-4 text-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+          <summary className="cursor-pointer font-semibold">عندك ملف قائمة الكلمات (oxford5000.csv)؟</summary>
+          <p className="mb-3 mt-2 text-slate-600 dark:text-slate-400">حمّله لتبدأ بكل الكلمات. يبقى في حسابك فقط.</p>
           <WordListImport compact />
-        </Card>
+        </details>
       )}
 
-      <ul className="grid gap-3">
+      <ul className="grid gap-2">
         {LEVELS.map((level) => {
           const list = byLevel.get(level) ?? []
           const count = isSample ? LEVEL_INFO[level].official : list.length || LEVEL_INFO[level].official
           const current = settings?.startLevel === level
           return (
             <li key={level}>
-              <Card className={current ? 'ring-2 ring-teal-600 dark:ring-teal-500' : ''}>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-2">
-                      <LevelBadge level={level} />
-                      <h2 className="text-lg font-bold">{LEVEL_INFO[level].title}</h2>
-                      {current && <span className="text-sm text-teal-700 dark:text-teal-400">(الحالي)</span>}
-                    </div>
-                    <p className="text-slate-600 dark:text-slate-400">{LEVEL_INFO[level].description}</p>
-                    <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
-                      <div className="flex gap-1">
-                        <dt className="text-slate-500">الكلمات:</dt>
-                        <dd className="font-medium">
-                          {count}
-                          {isSample && <span className="text-slate-500"> (في ملف التجربة: {list.length})</span>}
-                        </dd>
-                      </div>
-                      <div className="flex gap-1">
-                        <dt className="text-slate-500">المدة:</dt>
-                        <dd className="font-medium">
-                          {formatDuration(estimateDays(count, DEFAULT_DAILY))} بـ{formatWords(DEFAULT_DAILY)} يوميًا
-                        </dd>
-                      </div>
-                    </dl>
-                    {list.length > 0 && (
-                      <p className="mt-2 text-sm text-slate-500">
-                        أمثلة: <En className="text-base text-slate-700 dark:text-slate-300">{list.slice(0, 5).join(' · ')}</En>
-                      </p>
-                    )}
-                  </div>
-                  <Button onClick={() => pick(level)} className="w-full sm:w-auto" aria-label={`ابدأ من ${level}`}>
-                    ابدأ من هنا
-                  </Button>
-                </div>
-              </Card>
+              <button
+                type="button"
+                onClick={() => pick(level)}
+                aria-label={`ابدأ من ${level}`}
+                className={`flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-start shadow-sm ring-1 transition hover:ring-2 hover:ring-teal-600 active:scale-[0.99] dark:bg-slate-900 ${
+                  current ? 'ring-2 ring-teal-600 dark:ring-teal-500' : 'ring-slate-200 dark:ring-slate-800'
+                }`}
+              >
+                <LevelBadge level={level} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="font-bold">{LEVEL_INFO[level].title}</span>
+                    {current && <span className="text-xs text-teal-700 dark:text-teal-400">(الحالي)</span>}
+                  </span>
+                  <span className="block text-sm text-slate-500">{LEVEL_INFO[level].description}</span>
+                  <span className="mt-1 block text-xs text-slate-400">
+                    {count} كلمة · {formatDuration(estimateDays(count, DEFAULT_DAILY))} بـ{formatWords(DEFAULT_DAILY)} يوميًا
+                  </span>
+                </span>
+                <span aria-hidden="true" className="text-xl text-slate-400">
+                  ←
+                </span>
+              </button>
             </li>
           )
         })}

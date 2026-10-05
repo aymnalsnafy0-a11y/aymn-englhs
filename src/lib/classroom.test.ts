@@ -17,6 +17,13 @@ describe('codes', () => {
     expect(normalizeCode('ABC23')).toBeNull()
     expect(normalizeCode('ABC10Z')).toBeNull() // 1 و0 ليست في الأبجدية
   })
+  it('handles the longer teacher codes', () => {
+    const code = generateCode(seededRng(2), 8)
+    expect(code).toHaveLength(8)
+    expect(formatCode('ABCD2345')).toBe('ABCD-2345')
+    expect(normalizeCode('abcd-2345', 8)).toBe('ABCD2345')
+    expect(normalizeCode('ABC-234', 8)).toBeNull()
+  })
 })
 
 describe('assignment state', () => {

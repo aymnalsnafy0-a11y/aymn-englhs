@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { openAccount, resetPassword, signIn, signInWithGoogle, signOutCloud, syncNow, useCloudStatus } from '../data/cloud'
+import { openAccount, resetPassword, signIn, signInWithGoogle, syncNow, useCloudStatus } from '../data/cloud'
+import { logout, useProfile } from '../data/roles'
 import { Button } from './ui'
 
 function timeAgo(ts: number): string {
@@ -11,8 +12,10 @@ function timeAgo(ts: number): string {
 }
 
 /** الحساب والمزامنة بين الأجهزة. */
-export function AccountCard() {
+export function AccountCard({ intro }: { intro?: string }) {
   const cloud = useCloudStatus()
+  const { profile } = useProfile()
+  const [copied, setCopied] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -23,6 +26,11 @@ export function AccountCard() {
       <div>
         <p className="text-sm">
           مسجّل باسم <span dir="ltr" className="font-semibold">{cloud.email}</span>
+          {profile && (
+            <span className="ms-2 rounded-lg bg-teal-50 px-2 py-0.5 text-xs font-semibold text-teal-800 dark:bg-teal-950/60 dark:text-teal-300">
+              {profile.owner ? 'مالك الموقع' : profile.teacher ? 'معلم' : 'طالب'}
+            </span>
+          )}
         </p>
         <p className="mt-1 text-sm text-slate-500" aria-live="polite">
           {cloud.syncing ? 'جارٍ المزامنة…' : cloud.lastSync ? `آخر مزامنة: ${timeAgo(cloud.lastSync)}` : 'لم تتم المزامنة بعد'}
@@ -32,10 +40,33 @@ export function AccountCard() {
           <Button variant="secondary" disabled={cloud.syncing} onClick={() => void syncNow()}>
             زامن الآن
           </Button>
-          <Button variant="ghost" onClick={() => void signOutCloud()}>
+          <Button variant="ghost" onClick={() => void logout()}>
             تسجيل الخروج
           </Button>
         </div>
+        {cloud.uid && (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            معرّف الحساب (UID):
+            <code dir="ltr" className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800">
+              {cloud.uid}
+            </code>
+            <button
+              type="button"
+              className="text-teal-700 underline dark:text-teal-400"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(cloud.uid!)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                } catch {
+                  /* النسخ غير متاح */
+                }
+              }}
+            >
+              {copied ? '✓ نُسخ' : 'نسخ'}
+            </button>
+          </p>
+        )}
       </div>
     )
   }
@@ -58,7 +89,7 @@ export function AccountCard() {
       onFocus={() => void openAccount().catch(() => {})}
     >
       <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">
-        سجّل الدخول ليُحفظ تقدّمك وقائمتك في حسابك وتنتقل بين الجوال والكمبيوتر. أول مرة: اضغط «حساب جديد».
+        {intro ?? 'سجّل الدخول ليُحفظ تقدّمك وقائمتك في حسابك وتنتقل بين الجوال والكمبيوتر. أول مرة: اضغط «حساب جديد».'}
       </p>
       <Button
         variant="secondary"

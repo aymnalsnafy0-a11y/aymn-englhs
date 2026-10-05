@@ -98,22 +98,11 @@ export function Home({
           <span className="text-2xl font-bold text-teal-700 dark:text-teal-400">سياق</span>
           <LevelBadge level={settings.startLevel!} />
         </div>
-        <nav className="flex items-center gap-1" aria-label="التنقل">
-          {streak && streak.current > 0 && (
-            <span className="me-1 text-sm font-semibold text-amber-700 dark:text-amber-400" title="أيام متتالية">
-              🔥 {streak.current}
-            </span>
-          )}
-          <Button variant="ghost" onClick={() => go('classes')}>
-            الفصول
-          </Button>
-          <Button variant="ghost" onClick={() => go('progress')}>
-            تقدّمي
-          </Button>
-          <Button variant="ghost" onClick={() => go('settings')} aria-label="الإعدادات">
-            <span aria-hidden="true">⚙︎</span>
-          </Button>
-        </nav>
+        {streak && streak.current > 0 && (
+          <span className="rounded-full bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-400" title="أيام متتالية">
+            🔥 {streak.current}
+          </span>
+        )}
       </header>
 
       <Card className="mb-4 text-center">

@@ -1,6 +1,8 @@
 rules_version = '2';
 
 // قواعد Firestore لموقع سياق (مشروع engle-e9877).
+// - owners: مالك الموقع — يُضاف يدويًا من لوحة Firebase فقط (لا يكتبه أحد من الموقع).
+// - teachers: المعلمون — كل معلم يفعّل حسابه برمز من المالك (teacherInvites) يُستخدم مرة واحدة.
 // - learners: بيانات كل متعلم الخاصة — صاحبها فقط.
 // - classes: فصول المدرس. الرمز هو معرّف الفصل (يُعطى للطلاب).
 //   الطالب يرى واجبات فصله ونتيجته فقط؛ المدرس يرى طلاب فصوله ونتائجهم.
@@ -10,23 +12,63 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+    function isOwner() {
+      return signedIn() && exists(/databases/$(database)/documents/owners/$(request.auth.uid));
+    }
+    function isStaff() {
+      return isOwner() || (signedIn() && exists(/databases/$(database)/documents/teachers/$(request.auth.uid)));
+    }
+    function validName(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 40;
+    }
+
+    match /owners/{uid} {
+      allow get: if signedIn() && request.auth.uid == uid;
+    }
+
+    // رموز المعلمين: المالك يُنشئها ويراها كلها؛ من يعرف الرمز يقرؤه ويستخدمه مرة واحدة.
+    match /teacherInvites/{code} {
+      allow get: if signedIn();
+      allow list, delete: if isOwner();
+      allow create: if isOwner() && request.resource.data.usedBy == null;
+      allow update: if signedIn()
+        && resource.data.usedBy == null
+        && request.resource.data.usedBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedBy', 'usedName', 'usedAt'])
+        && existsAfter(/databases/$(database)/documents/teachers/$(request.auth.uid));
+    }
+
+    match /teachers/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isOwner());
+      allow list, delete: if isOwner();
+      // التفعيل: في نفس الدفعة يُعلَّم الرمز بأنه استُخدم من هذا الحساب.
+      allow create: if signedIn() && request.auth.uid == uid && validName(request.resource.data)
+        && (isOwner() || (
+          request.resource.data.invite is string
+          && get(/databases/$(database)/documents/teacherInvites/$(request.resource.data.invite)).data.usedBy == null
+          && getAfter(/databases/$(database)/documents/teacherInvites/$(request.resource.data.invite)).data.usedBy == request.auth.uid
+        ));
+      allow update: if signedIn() && request.auth.uid == uid && validName(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']);
+    }
 
     match /learners/{uid}/state/{doc} {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
     match /classes/{code} {
+      // معلم الفصل (ما دامت صلاحيته قائمة) أو المالك.
       function isTeacher() {
-        return signedIn() && get(/databases/$(database)/documents/classes/$(code)).data.teacherUid == request.auth.uid;
+        return isOwner() || (isStaff() && get(/databases/$(database)/documents/classes/$(code)).data.teacherUid == request.auth.uid);
       }
       function isMember() {
         return signedIn() && exists(/databases/$(database)/documents/classes/$(code)/members/$(request.auth.uid));
       }
 
-      // من يعرف الرمز يقرأ اسم الفصل لينضم. القائمة: المدرس يرى فصوله فقط.
+      // من يعرف الرمز يقرأ اسم الفصل لينضم. القائمة: المدرس يرى فصوله، والمالك يرى كل الفصول.
       allow get: if signedIn();
-      allow list: if signedIn() && resource.data.teacherUid == request.auth.uid;
-      allow create: if signedIn()
+      allow list: if (signedIn() && resource.data.teacherUid == request.auth.uid) || isOwner();
+      allow create: if isStaff()
         && request.resource.data.teacherUid == request.auth.uid
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 60;

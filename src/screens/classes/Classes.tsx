@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Card, Screen } from '../../components/ui'
-import { useCloudStatus } from '../../data/cloud'
+import { refreshProfile } from '../../data/roles'
 import { createClass, joinClass, leaveClass, myStudentClasses, myTeacherClasses } from '../../data/classroom'
 import { formatCode, normalizeCode } from '../../lib/classroom'
 import { cloudErrorText, useAsync } from '../../lib/useAsync'
@@ -8,37 +8,11 @@ import { cloudErrorText, useAsync } from '../../lib/useAsync'
 const input =
   'min-w-0 rounded-xl bg-white px-3 py-2 ring-1 ring-slate-300 focus:ring-2 focus:ring-teal-600 focus:outline-none dark:bg-slate-950 dark:ring-slate-700'
 
-/** الفصول: كطالب (الانضمام والواجبات) وكمدرس (فصولي وإنشاء فصل). */
-export function Classes({
-  onBack,
-  openSettings,
-  openClass,
-  openStudentClass,
-}: {
-  onBack: () => void
-  openSettings: () => void
-  openClass: (code: string) => void
-  openStudentClass: (code: string) => void
-}) {
-  const cloud = useCloudStatus()
-  if (cloud.state !== 'signedIn') {
-    return (
-      <Screen title="الفصول" onBack={onBack}>
-        <Card className="text-center">
-          <p className="text-4xl" aria-hidden="true">🏫</p>
-          <p className="mt-2 font-semibold">الفصول تحتاج حسابًا</p>
-          <p className="mt-1 text-slate-600 dark:text-slate-400">سجّل الدخول من الإعدادات لتنضم لفصل أو تنشئ فصلًا لطلابك.</p>
-          <Button className="mt-4" onClick={openSettings}>
-            افتح الإعدادات
-          </Button>
-        </Card>
-      </Screen>
-    )
-  }
+/** «فصلي» للطالب: فصوله وواجباته والانضمام لفصل آخر. */
+export function Classes({ onBack, openStudentClass }: { onBack?: () => void; openStudentClass: (code: string) => void }) {
   return (
-    <Screen title="الفصول" onBack={onBack}>
+    <Screen title="فصلي" onBack={onBack}>
       <StudentSection openStudentClass={openStudentClass} />
-      <TeacherSection email={cloud.email ?? ''} openClass={openClass} />
     </Screen>
   )
 }
@@ -62,6 +36,7 @@ function StudentSection({ openStudentClass }: { openStudentClass: (code: string)
       setCode('')
       setMsg(`✓ انضممت إلى «${info.name}».`)
       mine.reload()
+      void refreshProfile()
     } catch (err) {
       setMsg(cloudErrorText(err))
     } finally {
@@ -71,7 +46,7 @@ function StudentSection({ openStudentClass }: { openStudentClass: (code: string)
 
   return (
     <Card className="mb-4">
-      <h2 className="text-lg font-bold">فصولي كطالب</h2>
+      <h2 className="text-lg font-bold">فصولي</h2>
       {mine.loading ? (
         <p className="mt-2 text-sm text-slate-500">جارٍ التحميل…</p>
       ) : mine.error ? (
@@ -91,8 +66,10 @@ function StudentSection({ openStudentClass }: { openStudentClass: (code: string)
                 variant="ghost"
                 className="text-sm"
                 onClick={async () => {
+                  if (!window.confirm(`مغادرة «${c.name}»؟`)) return
                   await leaveClass(c.code)
                   mine.reload()
+                  void refreshProfile()
                 }}
               >
                 مغادرة
@@ -135,10 +112,10 @@ function StudentSection({ openStudentClass }: { openStudentClass: (code: string)
   )
 }
 
-function TeacherSection({ email, openClass }: { email: string; openClass: (code: string) => void }) {
+export function TeacherSection({ defaultName, openClass }: { defaultName: string; openClass: (code: string) => void }) {
   const classes = useAsync(myTeacherClasses, [])
   const [name, setName] = useState('')
-  const [teacherName, setTeacherName] = useState(email.split('@')[0])
+  const [teacherName, setTeacherName] = useState(defaultName)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -159,7 +136,7 @@ function TeacherSection({ email, openClass }: { email: string; openClass: (code:
 
   return (
     <Card>
-      <h2 className="text-lg font-bold">فصولي كمدرس</h2>
+      <h2 className="text-lg font-bold">فصولي</h2>
       {classes.loading ? (
         <p className="mt-2 text-sm text-slate-500">جارٍ التحميل…</p>
       ) : classes.error ? (

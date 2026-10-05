@@ -37,7 +37,7 @@ export function Progress({
   startQuiz,
   openMistakes,
 }: {
-  onBack: () => void
+  onBack?: () => void
   startQuiz: (kind: QuizKind, level?: Level) => void
   openMistakes: () => void
 }) {

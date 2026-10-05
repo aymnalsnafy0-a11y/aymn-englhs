@@ -11,18 +11,22 @@ export const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // بلا 0/O و
 export const CODE_LENGTH = 6
 export const MAX_ASSIGNMENT_WORDS = 30
 
-export function generateCode(rng: () => number = Math.random): string {
-  return Array.from({ length: CODE_LENGTH }, () => CODE_ALPHABET[Math.floor(rng() * CODE_ALPHABET.length)]).join('')
+/** رموز المعلمين أطول من رموز الفصول (تُعطى لشخص واحد وتُستخدم مرة واحدة). */
+export const TEACHER_CODE_LENGTH = 8
+
+export function generateCode(rng: () => number = Math.random, length = CODE_LENGTH): string {
+  return Array.from({ length }, () => CODE_ALPHABET[Math.floor(rng() * CODE_ALPHABET.length)]).join('')
 }
 
 /** يقبل «abc-234» و«ABC 234»… ويعيد الرمز بصيغته، أو null إن لم يكن صالحًا. */
-export function normalizeCode(input: string): string | null {
+export function normalizeCode(input: string, length = CODE_LENGTH): string | null {
   const code = input.toUpperCase().replace(/[\s-]/g, '')
-  return code.length === CODE_LENGTH && [...code].every((c) => CODE_ALPHABET.includes(c)) ? code : null
+  return code.length === length && [...code].every((c) => CODE_ALPHABET.includes(c)) ? code : null
 }
 
 export function formatCode(code: string): string {
-  return `${code.slice(0, 3)}-${code.slice(3)}`
+  const half = Math.ceil(code.length / 2)
+  return `${code.slice(0, half)}-${code.slice(half)}`
 }
 
 export interface AssignmentWord {
