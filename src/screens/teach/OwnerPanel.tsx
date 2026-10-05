@@ -164,7 +164,7 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
         {msg && <p className="mt-2 text-sm text-rose-700 dark:text-rose-400">{msg}</p>}
         {fresh && (
           <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-teal-50 p-3 dark:bg-teal-950/40">
-            <p dir="ltr" className="font-en text-2xl font-bold tracking-[0.2em] text-teal-800 dark:text-teal-300">
+            <p dir="ltr" className="font-en text-2xl font-bold tracking-[0.2em] whitespace-nowrap text-teal-800 dark:text-teal-300">
               {formatCode(fresh)}
             </p>
             <Share code={fresh} />
@@ -176,7 +176,7 @@ export function OwnerPanel({ onBack, openClass }: { onBack?: () => void; openCla
             {d.invites.map((i) => (
               <li key={i.code} className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-2 py-1.5 odd:bg-slate-50 dark:odd:bg-slate-800/50">
                 <span className="min-w-0">
-                  <span dir="ltr" className="font-en font-semibold tracking-widest">
+                  <span dir="ltr" className="font-en font-semibold tracking-widest whitespace-nowrap">
                     {formatCode(i.code)}
                   </span>
                   <span className="ms-2 text-slate-500">
@@ -436,8 +436,8 @@ function ClassRow({ c, teachers, open, onChanged }: { c: ClassInfo; teachers: Te
   }
   return (
     <li className="rounded-xl bg-slate-50 dark:bg-slate-800/60">
-      <div className="flex items-center gap-2 p-3">
-        <button type="button" onClick={open} className="min-w-0 flex-1 text-start">
+      <div className="flex flex-wrap items-center gap-2 p-3">
+        <button type="button" onClick={open} className="min-w-0 flex-1 basis-40 text-start [overflow-wrap:anywhere]">
           <span className="block font-semibold">{c.name}</span>
           <span className="block text-sm text-slate-500">
             المعلم: {c.teacherName || '—'}
@@ -445,7 +445,7 @@ function ClassRow({ c, teachers, open, onChanged }: { c: ClassInfo; teachers: Te
             {c.students !== undefined && ` · ${c.students} طالب`}
           </span>
         </button>
-        <span dir="ltr" className="font-en tracking-widest text-slate-500">
+        <span dir="ltr" className="font-en shrink-0 tracking-widest whitespace-nowrap text-slate-500">
           {formatCode(c.code)}
         </span>
         <Button variant="ghost" className="min-h-9 px-2 text-sm" aria-expanded={manage} onClick={() => setManage((m) => !m)}>

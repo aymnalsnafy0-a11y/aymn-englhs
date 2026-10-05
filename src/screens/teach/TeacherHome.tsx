@@ -12,11 +12,11 @@ export function TeacherHome({ openClass, openOwner }: { openClass: (code: string
   return (
     <Screen>
       <header className="mb-5 flex items-center justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm text-slate-500">لوحة المعلم</p>
-          <h1 className="text-2xl font-bold">أهلًا {name} 👋</h1>
+          <h1 className="text-2xl font-bold [overflow-wrap:anywhere]">أهلًا {name} 👋</h1>
         </div>
-        <span className="text-2xl font-bold text-teal-700 dark:text-teal-400">سياق</span>
+        <span className="shrink-0 text-2xl font-bold text-teal-700 dark:text-teal-400">سياق</span>
       </header>
 
       {profile?.owner && (

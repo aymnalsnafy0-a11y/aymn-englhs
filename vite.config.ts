@@ -3,6 +3,26 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import postcss from 'postcss'
+import cascadeLayers from '@csstools/postcss-cascade-layers'
+
+/**
+ * Tailwind v4 يضع كل التنسيقات داخل @layer، والمتصفحات الأقدم (مثل Safari قبل 15.4) تتجاهلها كلها.
+ * بعد البناء نحوّل الطبقات إلى CSS عادي بنفس الأولوية، فيظهر الموقع منسقًا في كل المتصفحات.
+ */
+function flattenCssLayers(): Plugin {
+  return {
+    name: 'flatten-css-layers',
+    apply: 'build',
+    async generateBundle(_, bundle) {
+      for (const file of Object.values(bundle)) {
+        if (file.type !== 'asset' || !file.fileName.endsWith('.css')) continue
+        const result = await postcss([cascadeLayers()]).process(String(file.source), { from: undefined })
+        file.source = result.css
+      }
+    },
+  }
+}
 
 /** خادم التطوير يخدم /api/* بنفس منطق دوال Vercel، والمفتاح من .env (لا يصل للواجهة). */
 const ROUTES: Record<string, [string, string]> = {
@@ -46,11 +66,19 @@ export default defineConfig(({ mode }) => ({
   // متغيرات بلا بادئة VITE_ تبقى في الخادم فقط.
   // BASE_PATH لـ GitHub Pages (الموقع تحت /aymn-englhs/)؛ artifact بمسارات نسبية.
   base: mode === 'artifact' ? './' : (process.env.BASE_PATH ?? '/'),
-  build: mode === 'artifact' ? { outDir: 'dist-artifact' } : undefined,
+  build: {
+    ...(mode === 'artifact' ? { outDir: 'dist-artifact' } : {}),
+    // يعمل على الأجهزة الأقدم أيضًا (مثل آيفون بنظام iOS 14–16 وأندرويد قديم):
+    // تُحوَّل الألوان الحديثة (oklch) وصيغ JS الجديدة إلى ما تفهمه هذه المتصفحات.
+    target: ['es2020', 'safari14', 'chrome87', 'firefox78', 'edge88'],
+    cssTarget: ['safari14', 'chrome87', 'firefox78', 'edge88'],
+    cssMinify: 'lightningcss',
+  },
   plugins: [
     devApi(loadEnv(mode, process.cwd(), '')),
     react(),
     tailwindcss(),
+    flattenCssLayers(),
     VitePWA({
       registerType: 'autoUpdate',
       disable: mode === 'artifact',

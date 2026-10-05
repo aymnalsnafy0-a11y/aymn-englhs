@@ -63,7 +63,7 @@ export function ClassDashboard({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm text-slate-500">رمز الفصل — أعطه لطلابك</p>
-            <p dir="ltr" className="font-en text-3xl font-bold tracking-[0.2em] text-teal-700 dark:text-teal-400">
+            <p dir="ltr" className="font-en text-3xl font-bold tracking-[0.2em] whitespace-nowrap text-teal-700 dark:text-teal-400">
               {formatCode(code)}
             </p>
           </div>

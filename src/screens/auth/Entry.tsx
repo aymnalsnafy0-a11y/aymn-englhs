@@ -9,6 +9,7 @@ import { openAccount, useCloudStatus } from '../../data/cloud'
 import { joinClass } from '../../data/classroom'
 import { chooseRole, logout, redeemTeacherCode, refreshProfile, useProfile, type Role } from '../../data/roles'
 import { normalizeCode, TEACHER_CODE_LENGTH } from '../../lib/classroom'
+import { chromeIntent, inAppBrowser, isAndroid } from '../../lib/browser'
 import { cloudErrorText } from '../../lib/useAsync'
 
 const input =
@@ -26,7 +27,7 @@ function Logo({ size = 'size-20' }: { size?: string }) {
 /** إطار شاشات الدخول: رأس ملوّن بالشعار ثم بطاقة المحتوى. */
 function EntryLayout({ title, subtitle, onBack, children }: { title: string; subtitle?: string; onBack?: () => void; children: ReactNode }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-gradient-to-b from-teal-700 via-teal-800 to-teal-950 text-white">
+    <div className="flex min-h-screen min-h-dvh flex-col bg-gradient-to-b from-teal-700 via-teal-800 to-teal-950 text-white">
       <header className="relative mx-auto flex w-full max-w-md flex-col items-center px-6 pb-8 pt-[max(2.5rem,env(safe-area-inset-top))] text-center">
         {onBack && (
           <button
@@ -72,7 +73,7 @@ function RoleTile({ icon, title, detail, onClick }: { icon: IconName; title: str
 
 export function Splash({ text = 'جارٍ التحميل…' }: { text?: string }) {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-gradient-to-b from-teal-700 to-teal-950 text-white">
+    <div className="flex min-h-screen min-h-dvh flex-col items-center justify-center gap-4 bg-gradient-to-b from-teal-700 to-teal-950 text-white">
       <Logo />
       <p className="text-2xl font-bold">سياق</p>
       <p aria-live="polite" className="text-sm text-teal-100">
@@ -106,8 +107,47 @@ export function SignIn({ role }: { role: Role }) {
       subtitle={role === 'teacher' ? 'سجّل الدخول ثم فعّل حسابك برمز المعلم.' : 'سجّل الدخول ثم أدخل رمز الفصل من معلمك.'}
       onBack={() => chooseRole(null)}
     >
+      <InAppNotice />
       <AccountCard intro="بحساب Google أسرع. أو بالإيميل وكلمة مرور — أول مرة اضغط «حساب جديد»." />
     </EntryLayout>
+  )
+}
+
+/** داخل متصفح تطبيق (إنستقرام، سناب…): دخول Google لا يعمل، فنقترح فتح الرابط في المتصفح. */
+function InAppNotice() {
+  const [copied, setCopied] = useState(false)
+  const app = inAppBrowser(navigator.userAgent)
+  if (!app) return null
+  const url = location.href
+  return (
+    <div className="mb-4 rounded-2xl bg-amber-50 p-4 text-sm ring-1 ring-amber-300 dark:bg-amber-950/30 dark:ring-amber-800">
+      <p className="font-bold">أنت تفتح الموقع من داخل {app === 'تطبيق' ? 'تطبيق' : app}</p>
+      <p className="mt-1 text-slate-700 dark:text-slate-300">
+        الدخول بحساب Google لا يعمل هنا. افتح الرابط في {isAndroid(navigator.userAgent) ? 'Chrome' : 'Safari'} (من قائمة ⋯ اختر «فتح في المتصفح»)، أو ادخل
+        بالإيميل وكلمة مرور.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {isAndroid(navigator.userAgent) && (
+          <a href={chromeIntent(url)} className="inline-flex min-h-10 items-center rounded-xl bg-teal-700 px-4 font-medium text-white">
+            افتح في Chrome
+          </a>
+        )}
+        <Button
+          variant="secondary"
+          className="min-h-10"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(url)
+              setCopied(true)
+            } catch {
+              /* النسخ غير متاح */
+            }
+          }}
+        >
+          {copied ? '✓ نُسخ الرابط' : 'انسخ الرابط'}
+        </Button>
+      </div>
+    </div>
   )
 }
 

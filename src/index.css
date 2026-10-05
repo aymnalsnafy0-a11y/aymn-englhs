@@ -22,6 +22,22 @@
   button:not(:disabled) {
     cursor: pointer;
   }
+  /* آيفون يكبّر الصفحة تلقائيًا عند الكتابة في خانة خطها أصغر من 16px — نمنع ذلك على الجوال. */
+  @media (max-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: max(16px, 1em);
+    }
+  }
+  /* لا تتجاوز الصفحة عرض الشاشة أبدًا (كلمات إنجليزية طويلة أو روابط). */
+  html,
+  body {
+    overflow-x: clip;
+  }
+  body {
+    overflow-wrap: break-word;
+  }
 }
 
 @layer utilities {

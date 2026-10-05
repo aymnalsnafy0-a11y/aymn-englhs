@@ -56,8 +56,8 @@ function StudentSection({ openStudentClass }: { openStudentClass: (code: string)
       ) : (
         <ul className="mt-2 grid gap-2">
           {mine.data!.classes.map((c) => (
-            <li key={c.code} className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
-              <button type="button" className="min-w-0 flex-1 text-start" onClick={() => openStudentClass(c.code)}>
+            <li key={c.code} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+              <button type="button" className="min-w-0 flex-1 basis-40 text-start [overflow-wrap:anywhere]" onClick={() => openStudentClass(c.code)}>
                 <span className="block font-semibold">{c.name}</span>
                 <span className="block text-sm text-slate-500">المدرس: {c.teacherName || '—'}</span>
               </button>
@@ -159,7 +159,7 @@ export function TeacherSection({ defaultName, openClass }: { defaultName: string
                     {c.students === undefined ? '' : c.students === 0 ? 'لا يوجد طلاب بعد' : `${c.students} طالب`}
                   </span>
                 </span>
-                <span dir="ltr" className="font-en tracking-widest text-slate-500">
+                <span dir="ltr" className="font-en shrink-0 tracking-widest whitespace-nowrap text-slate-500">
                   {formatCode(c.code)}
                 </span>
               </button>

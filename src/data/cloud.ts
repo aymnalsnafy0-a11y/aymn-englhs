@@ -141,6 +141,8 @@ const AUTH_ERRORS: Record<string, string> = {
   'auth/network-request-failed': 'لا يوجد اتصال بالإنترنت.',
   'auth/configuration-not-found': 'تسجيل الدخول غير مفعّل بعد في Firebase (Authentication ← Get started ← Email/Password).',
   'auth/operation-not-allowed': 'تسجيل الدخول بالإيميل غير مفعّل في Firebase (Authentication ← Sign-in method).',
+  'auth/popup-blocked': 'المتصفح منع نافذة Google. اسمح بالنوافذ المنبثقة أو ادخل بالإيميل.',
+  'auth/web-storage-unsupported': 'المتصفح يمنع التخزين (وضع التصفح الخاص؟). افتح الموقع في نافذة عادية.',
   'auth/unauthorized-domain': 'هذا الموقع غير مضاف في Firebase (Authentication ← Settings ← Authorized domains).',
 }
 
@@ -160,26 +162,34 @@ export async function signIn(email: string, password: string, create: boolean): 
   }
 }
 
-/** الدخول بحساب Google: نافذة منبثقة، وإن منعها المتصفح (مثل التطبيق المثبّت) ننتقل بإعادة توجيه. */
+/**
+ * الدخول بحساب Google: نافذة منبثقة، وإن منعها المتصفح (مثل التطبيق المثبّت) ننتقل بإعادة توجيه.
+ * سفاري (آيفون) يمنع النافذة إن لم تُفتح مباشرة بعد الضغطة، فنفتحها فورًا متى كانت المكتبة محمّلة
+ * (شاشة الدخول تحمّلها مسبقًا).
+ */
 export async function signInWithGoogle(): Promise<string | null> {
   try {
-    const { auth, au } = await init()
-    const provider = new au.GoogleAuthProvider()
-    try {
-      await au.signInWithPopup(auth, provider)
-    } catch (e) {
-      const code = (e as { code?: string })?.code ?? ''
-      if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
-        await au.signInWithRedirect(auth, provider)
-        return null
-      }
-      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return null
-      throw e
-    }
-    return null
+    return await googlePopup(sdk ?? (await init()))
   } catch (e) {
     return authError(e)
   }
+}
+
+async function googlePopup({ auth, au }: Sdk): Promise<string | null> {
+  const provider = new au.GoogleAuthProvider()
+  provider.setCustomParameters({ prompt: 'select_account' })
+  try {
+    await au.signInWithPopup(auth, provider)
+  } catch (e) {
+    const code = (e as { code?: string })?.code ?? ''
+    if (code === 'auth/popup-blocked' || code === 'auth/operation-not-supported-in-this-environment') {
+      await au.signInWithRedirect(auth, provider)
+      return null
+    }
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return null
+    throw e
+  }
+  return null
 }
 
 export async function resetPassword(email: string): Promise<string> {
